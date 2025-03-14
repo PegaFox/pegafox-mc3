@@ -7,16 +7,16 @@
 #define USE_PEGAFOX_UTILS_IMPLEMENTATION
 #include <pegafox/utils.hpp>
 
-#include "../../../PF2/PF2_tools/emulator/bus.hpp"
-#include "../../../PF2/PF2_tools/emulator/ram.hpp"
-#include "../../../PF2/PF2_tools/emulator/rom.hpp"
+#include "emu-utils/bus.hpp"
+#include "emu-utils/ram.hpp"
+#include "emu-utils/rom.hpp"
 
-#include "hdd.hpp"
-#include "tty.hpp"
-#include "vga.hpp"
-#include "keyboard.hpp"
-#include "mouse.hpp"
-#include "speaker.hpp"
+#include "emu-utils/hdd.hpp"
+#include "emu-utils/tty.hpp"
+#include "emu-utils/vga.hpp"
+#include "emu-utils/keyboard.hpp"
+#include "emu-utils/mouse.hpp"
+#include "emu-utils/speaker.hpp"
 
 #include "virt_machine.hpp"
 
