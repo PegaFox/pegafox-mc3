@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.30)
+
+set(CMAKE_CXX_STANDARD 20)
+
+project(mc3-tools)
+
+add_executable(mc3as assembler/main.cpp)
+
+#add_executable(C_compiler C_compiler/main.cpp)
+
+add_executable(mc3dump disassembler/main.cpp)
+
+add_executable(mc3emu emulator/main.cpp)
+
+target_link_libraries(mc3emu PRIVATE sfml-graphics sfml-window sfml-system sfml-audio)
