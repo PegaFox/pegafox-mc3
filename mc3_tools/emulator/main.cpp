@@ -7,6 +7,8 @@
 #define USE_PEGAFOX_UTILS_IMPLEMENTATION
 #include <pegafox/utils.hpp>
 
+#include "gui-lib/gui.hpp"
+
 #include "emu-utils/bus.hpp"
 #include "emu-utils/ram.hpp"
 #include "emu-utils/rom.hpp"

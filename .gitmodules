@@ -1,3 +1,6 @@
 [submodule "mc3_tools/emulator/emu-utils"]
 	path = mc3_tools/emulator/emu-utils
 	url = https://github.com/PegaFox/emu-utils
+[submodule "mc3_tools/emulator/gui-lib"]
+	path = mc3_tools/emulator/gui-lib
+	url = https://github.com/PegaFox/gui-lib

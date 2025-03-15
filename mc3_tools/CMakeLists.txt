@@ -4,6 +4,8 @@ set(CMAKE_CXX_STANDARD 20)
 
 project(mc3-tools)
 
+add_subdirectory(emulator/gui-lib)
+
 add_executable(mc3as assembler/main.cpp)
 
 #add_executable(C_compiler C_compiler/main.cpp)

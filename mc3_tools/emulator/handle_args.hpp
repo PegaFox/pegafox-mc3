@@ -43,28 +43,28 @@ void handleArgs(int argc, char* argv[])
       arg = argv[i];
       if (arg == "ram")
       {
-        
+        debugWindow.enabledModes.ram = true;
       } else if (arg == "vga")
       {
-
+        debugWindow.enabledModes.vga = true;
       } else if (arg == "tty")
       {
-        
+        debugWindow.enabledModes.tty = true;
       } else if (arg == "hdd")
       {
-        
+        debugWindow.enabledModes.hdd = true;
       } else if (arg == "keyboard")
       {
-        
+        debugWindow.enabledModes.keyboard = true;
       } else if (arg == "mouse")
       {
-        
+        debugWindow.enabledModes.mouse = true;
       } else if (arg == "speaker")
       {
-        
+        debugWindow.enabledModes.speaker = true;
       } else if (arg == "cpu")
       {
-
+        debugWindow.enabledModes.cpu = true;
       } else
       {
         i--;
