@@ -1,3 +1,7 @@
+#include <cstdint>
+#include <array>
+
+#include "emu-utils/bus.hpp"
 #include "../mc3_utils.hpp"
 
 class VirtMachine

@@ -14,4 +14,4 @@ add_executable(mc3dump disassembler/main.cpp)
 
 add_executable(mc3emu emulator/main.cpp)
 
-target_link_libraries(mc3emu PRIVATE sfml-graphics sfml-window sfml-system sfml-audio)
+target_link_libraries(mc3emu PRIVATE gui-lib sfml-graphics sfml-window sfml-system sfml-audio)

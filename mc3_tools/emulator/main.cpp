@@ -2,12 +2,9 @@
 #include <SFML/Audio.hpp>
 #include <iostream>
 #include <string>
-#include <deque>
 
 #define USE_PEGAFOX_UTILS_IMPLEMENTATION
 #include <pegafox/utils.hpp>
-
-#include "gui-lib/gui.hpp"
 
 #include "emu-utils/bus.hpp"
 #include "emu-utils/ram.hpp"
@@ -97,16 +94,19 @@ int main(int argc, char *argv[])
 
     mouse.update();
 
-    if (vm.pc >= 0xFFFE)
+    if (!debugWindow.CPUpaused())
     {
-      running = false;
-    }
+      if (vm.pc >= 0xFFFE)
+      {
+        running = false;
+      }
 
-    vm.tickClock();
+      vm.tickClock();
 
-    if (vm.pc != 0x0000)
-    {
-      running = true;
+      if (vm.pc != 0x0000)
+      {
+        running = true;
+      }
     }
 
     debugWindow.update();

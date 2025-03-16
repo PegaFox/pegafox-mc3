@@ -1,3 +1,10 @@
+#include <iostream>
+#include <string>
+#include "debug_window.hpp"
+
+extern DebugWindow debugWindow;
+extern std::string filename;
+
 void showHelp()
 {
   std::cout << R"(
