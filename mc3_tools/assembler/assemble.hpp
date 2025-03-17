@@ -202,11 +202,11 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
       {
         uint16_t value = parseInt(variables, tokens[t], &program[pos >> 1].second);
 
-        if (value & 0xFF == value)
+        if ((value & 0xFF) == value)
         {
           program[pos >> 1].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
           program[pos >> 1].first[1] = value;
-        } else if (value & 0xFF00 == value)
+        } else if ((value & 0xFF00) == value)
         {
           program[pos >> 1].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
           program[pos >> 1].first[1] = value >> 8;
@@ -232,7 +232,7 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
           program[pos >> 1].first[1] = 8;
           pos += 2;
 
-          program[pos >> 1].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
+          program[pos >> 1].first[0] = (uint8_t(Opcode::AddVal) << 3) | mainReg;
           program[pos >> 1].first[1] = value & 0xFF;
         }
       } else

@@ -59,9 +59,23 @@ class VirtMachine
           }
         }
 
+        uint16_t operator[](uint8_t index) const
+        {
+          return data[(begin+index)%data.size()];
+        }
+
+        uint8_t size() const
+        {
+          if (begin > end)
+          {
+            return end+16 - begin;
+          }
+          return end - begin;
+        }
+
         bool empty() const
         {
-          return (begin+1)%data.size() == end;
+          return begin == end;
         }
       private:
         std::array<uint16_t, 16> data;
@@ -79,17 +93,35 @@ class VirtMachine
       intQueue.push(interruptID);
     }
 
-    void tickClock()
+    bool tickClock()
     {
+      if (!running)
+      {
+        return false;
+      }
+
+      if (pc >= 0xFFFE)
+      {
+        running = false;
+      }
+
       handleInstruction();
+    
+      if (pc != 0x0000)
+      {
+        running = true;
+      }
 
       if (intVec != 0 && !inInterrupt && !intQueue.empty())
       {
         handleInterrupt();
       }
+      return running;
     }
 
   private:
+    bool running = true;
+
     void handleInstruction()
     {
       uint8_t first = bus.read(pc++);

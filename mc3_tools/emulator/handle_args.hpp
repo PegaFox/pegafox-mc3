@@ -16,7 +16,7 @@ Usage:
 Options:
   -h, --help  Show this help text
   -d [device], --debug [device]  Show debug window for specified device, or cpu if omitted
-    Possible devices: cpu, ram, vga, tty, hdd, keyboard, mouse, speaker
+    Possible devices: all, cpu, ram, vga, tty, hdd, keyboard, mouse, speaker
 
 Examples:
 
@@ -48,7 +48,17 @@ void handleArgs(int argc, char* argv[])
       debugWindow.create();
       i++;
       arg = argv[i];
-      if (arg == "ram")
+      if (arg == "all")
+      {
+        debugWindow.enabledModes.ram = true;
+        debugWindow.enabledModes.vga = true;
+        debugWindow.enabledModes.tty = true;
+        debugWindow.enabledModes.hdd = true;
+        debugWindow.enabledModes.keyboard = true;
+        debugWindow.enabledModes.mouse = true;
+        debugWindow.enabledModes.speaker = true;
+        debugWindow.enabledModes.cpu = true;
+      } else if (arg == "ram")
       {
         debugWindow.enabledModes.ram = true;
       } else if (arg == "vga")
@@ -69,11 +79,9 @@ void handleArgs(int argc, char* argv[])
       } else if (arg == "speaker")
       {
         debugWindow.enabledModes.speaker = true;
-      } else if (arg == "cpu")
-      {
-        debugWindow.enabledModes.cpu = true;
       } else
       {
+        debugWindow.enabledModes.cpu = true;
         i--;
       }
     } else

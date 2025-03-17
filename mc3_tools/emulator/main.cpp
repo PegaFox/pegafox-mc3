@@ -19,9 +19,14 @@
 
 #include "virt_machine.hpp"
 
-#include "debug_window.hpp"
-
-DebugWindow debugWindow;
+VirtMachine vm;
+RAM<0xFF00> ram;
+HDD hdd("drive.img", 2880);
+TTY tty;
+VGA vga;
+Keyboard keyboard;
+Mouse mouse;
+Speaker speaker;
 
 std::string filename;
 
@@ -29,8 +34,9 @@ std::string filename;
 
 #include "handle_args.hpp"
 
-VirtMachine vm;
+#include "debug_window.hpp"
 
+DebugWindow debugWindow;
 /*
 Memory layout
 
@@ -49,14 +55,7 @@ int main(int argc, char *argv[])
 {
   handleArgs(argc, argv);
 
-  RAM<0xFF00> ram;
-
-  HDD hdd("drive.img");
-  TTY tty;
-  VGA vga;
-  Keyboard keyboard;
-  Mouse mouse;
-  Speaker speaker;
+  pf::FPS vSyncClock;
 
   vm.bus.connect(&ram, 0x0000, 0xFEFF);
   vm.bus.connect(&hdd, 0xFF00, 0xFF06);
@@ -79,12 +78,23 @@ int main(int argc, char *argv[])
   bool running = true;
   while (running)
   {
+    bool newFrame = false;
+    vSyncClock.get_fps(false);
+    if (vSyncClock.deltaTime > 0.015f)
+    {
+      newFrame = true;
+      vSyncClock.get_fps();
+    }
+
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape))
     {
       break;
     }
 
-    vga.update();
+    if (newFrame)
+    {
+      vga.update();
+    }
 
     // sends interrupt 0x60 when a key event occurs.
     if (keyboard.update())
@@ -96,20 +106,13 @@ int main(int argc, char *argv[])
 
     if (!debugWindow.CPUpaused())
     {
-      if (vm.pc >= 0xFFFE)
-      {
-        running = false;
-      }
-
-      vm.tickClock();
-
-      if (vm.pc != 0x0000)
-      {
-        running = true;
-      }
+      running = vm.tickClock();
     }
 
-    debugWindow.update();
+    if (newFrame)
+    {
+      debugWindow.update();
+    }
 
     //std::cout << '\r' << ((uint16_t)ram.memory[0x0011] | ((uint16_t)ram.memory[0x0012] << 8)) << std::flush;
   }

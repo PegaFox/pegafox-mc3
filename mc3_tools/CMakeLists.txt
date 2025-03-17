@@ -15,3 +15,5 @@ add_executable(mc3dump disassembler/main.cpp)
 add_executable(mc3emu emulator/main.cpp)
 
 target_link_libraries(mc3emu PRIVATE gui-lib sfml-graphics sfml-window sfml-system sfml-audio)
+
+configure_file(emulator/3270NerdFontMono-Regular.ttf 3270NerdFontMono-Regular.ttf COPYONLY)
