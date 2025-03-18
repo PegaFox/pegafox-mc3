@@ -8,7 +8,7 @@ add_subdirectory(emulator/gui-lib)
 
 add_executable(mc3as assembler/main.cpp)
 
-#add_executable(C_compiler C_compiler/main.cpp)
+add_executable(C_compiler C_compiler/main.cpp)
 
 add_executable(mc3dump disassembler/main.cpp)
 

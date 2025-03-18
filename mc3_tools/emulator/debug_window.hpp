@@ -38,7 +38,7 @@ class DebugWindow
       window.create(sf::VideoMode(sf::Vector2u(1024, 512)), "Debug Window");
       pause = true;
 
-      if (!pfui::Paragraph::font.openFromFile(/*"3270NerdFontMono-Condensed.ttf"*/"PublicPixel.ttf"))
+      if (!pfui::Paragraph::font.openFromFile(/*"3270NerdFontMono-Regular.ttf"*/"PublicPixel.ttf"))
       {
         std::clog << "Warning: debug window failed to load default font, text rendering mey not work correctly\n";
       }
