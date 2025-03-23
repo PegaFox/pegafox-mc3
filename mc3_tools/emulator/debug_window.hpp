@@ -83,6 +83,9 @@ class DebugWindow
             } else if (pause && key->code == sf::Keyboard::Key::S)
             {
               vm.tickClock();
+            } else if (key->code == sf::Keyboard::Key::I)
+            {
+              vm.hardwareInterrupt(0xFF);
             }
           } else if (const sf::Event::MouseWheelScrolled* scroll = event->getIf<sf::Event::MouseWheelScrolled>())
           {

@@ -35,10 +35,16 @@ class VirtMachine
       public:
         bool push(uint16_t value)
         {
-          if (begin != end)
+          if (!full)
           {
             data[end++] = value;
             end %= data.size();
+
+            if (begin == end)
+            {
+              full = true;
+            }
+
             return true;
           } else
           {
@@ -50,6 +56,7 @@ class VirtMachine
         {
           if (!empty())
           {
+            full = false;
             uint16_t value = data[begin++];
             begin %= data.size();
             return value;
@@ -66,6 +73,11 @@ class VirtMachine
 
         uint8_t size() const
         {
+          if (full)
+          {
+            return 16;
+          }
+
           if (begin > end)
           {
             return end+16 - begin;
@@ -75,12 +87,13 @@ class VirtMachine
 
         bool empty() const
         {
-          return begin == end;
+          return begin == end && !full;
         }
       private:
         std::array<uint16_t, 16> data;
         uint8_t begin = 0;
         uint8_t end = 0;
+        bool full = false;
     } intQueue;
 
     void hardwareInterrupt(uint16_t interruptID)
@@ -184,45 +197,45 @@ class VirtMachine
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::OrReg:
-          regs[first & 0x07] |= regs[second >> 5] + int8_t(second & 0x1F);
+          regs[first & 0x07] |= regs[second >> 5] + (int8_t(second << 3) >> 3);
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::AndReg:
-          regs[first & 0x07] &= regs[second >> 5] + int8_t(second & 0x1F);
+          regs[first & 0x07] &= regs[second >> 5] + (int8_t(second << 3) >> 3);
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::XorReg:
-          regs[first & 0x07] ^= regs[second >> 5] + int8_t(second & 0x1F);
+          regs[first & 0x07] ^= regs[second >> 5] + (int8_t(second << 3) >> 3);
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::LshReg:
-          flags.carry = regs[first & 0x07] >> (16-(regs[second >> 5] + int8_t(second & 0x1F)));
+          flags.carry = regs[first & 0x07] >> (16-(regs[second >> 5] + (int8_t(second << 3) >> 3)));
 
-          regs[first & 0x07] <<= regs[second >> 5] + int8_t(second & 0x1F);
+          regs[first & 0x07] <<= regs[second >> 5] + (int8_t(second << 3) >> 3);
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::RshReg:
-          flags.carry = regs[first & 0x07] << (16-(regs[second >> 5] + int8_t(second & 0x1F)));
+          flags.carry = regs[first & 0x07] << (16-(regs[second >> 5] + (int8_t(second << 3) >> 3)));
 
-          regs[first & 0x07] >>= regs[second >> 5] + int8_t(second & 0x1F);
+          regs[first & 0x07] >>= regs[second >> 5] + (int8_t(second << 3) >> 3);
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::AddReg:
-          flags.carry = regs[first & 0x07] + (regs[second >> 5] + int8_t(second & 0x1F)) < (regs[second >> 5] + int8_t(second & 0x1F));
-          flags.overflow = (regs[first & 0x07] >> 15) == ((regs[second >> 5] + int8_t(second & 0x1F)) >> 15) && (regs[first & 0x07] + (regs[second >> 5] + int8_t(second & 0x1F))) >> 15 != (regs[first & 0x07] >> 15);
+          flags.carry = regs[first & 0x07] + (regs[second >> 5] + (int8_t(second << 3) >> 3)) < (regs[second >> 5] + (int8_t(second << 3) >> 3));
+          flags.overflow = (regs[first & 0x07] >> 15) == ((regs[second >> 5] + (int8_t(second << 3) >> 3)) >> 15) && (regs[first & 0x07] + (regs[second >> 5] + (int8_t(second << 3) >> 3))) >> 15 != (regs[first & 0x07] >> 15);
 
-          regs[first & 0x07] += regs[second >> 5] + int8_t(second & 0x1F);
+          regs[first & 0x07] += regs[second >> 5] + (int8_t(second << 3) >> 3);
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::SubReg:
-          flags.carry = regs[first & 0x07] - (regs[second >> 5] + int8_t(second & 0x1F)) > (regs[second >> 5] + int8_t(second & 0x1F));
-          flags.overflow = (regs[first & 0x07] >> 15) != ((regs[second >> 5] + int8_t(second & 0x1F)) >> 15) && (regs[first & 0x07] + (regs[second >> 5] + int8_t(second & 0x1F))) >> 15 != (regs[first & 0x07] >> 15);
+          flags.carry = regs[first & 0x07] - (regs[second >> 5] + (int8_t(second << 3) >> 3)) > (regs[second >> 5] + (int8_t(second << 3) >> 3));
+          flags.overflow = (regs[first & 0x07] >> 15) != ((regs[second >> 5] + (int8_t(second << 3) >> 3)) >> 15) && (regs[first & 0x07] + (regs[second >> 5] + (int8_t(second << 3) >> 3))) >> 15 != (regs[first & 0x07] >> 15);
           
-          regs[first & 0x07] -= regs[second >> 5] + int8_t(second & 0x1F);
+          regs[first & 0x07] -= regs[second >> 5] + (int8_t(second << 3) >> 3);
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::SetReg:
-          regs[first & 0x07] = regs[second >> 5] + int8_t(second & 0x1F);
+          regs[first & 0x07] = regs[second >> 5] + (int8_t(second << 3) >> 3);
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::SetVal:
@@ -230,20 +243,20 @@ class VirtMachine
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::LodB:
-          regs[first & 0x07] = bus.read(regs[second >> 6] + int8_t(second & 0x3F));
+          regs[first & 0x07] = bus.read(regs[second >> 6] + (int8_t(second << 2) >> 2));
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::LodW: {
-          uint16_t address = regs[second >> 6] + int8_t(second & 0x3F);
+          uint16_t address = regs[second >> 6] + (int8_t(second << 2) >> 2);
 
           regs[first & 0x07] = (uint16_t)bus.read(address) | ((uint16_t)bus.read(address + 1) << 8);
           updateFlags(regs[first & 0x07]);
           break;
         } case Opcode::StrB:
-          bus.write(regs[second >> 6] + int8_t(second & 0x3F), regs[first & 0x07]);
+          bus.write(regs[second >> 6] + (int8_t(second << 2) >> 2), regs[first & 0x07]);
           break;
         case Opcode::StrW: {
-          uint16_t address = regs[second >> 6] + int8_t(second & 0x3F);
+          uint16_t address = regs[second >> 6] + (int8_t(second << 2) >> 2);
 
           bus.write(address, regs[first & 0x07] & 0xFF);
           bus.write(address + 1, regs[first & 0x07] >> 8);
@@ -297,7 +310,7 @@ class VirtMachine
           }
           break;
         case Opcode::OpOnly:
-          switch (OnlyOpcode((((uint16_t)first << 13) >> 5) | (uint16_t)second))
+          switch (OnlyOpcode((((uint16_t)first & 0x7) << 8) | (uint16_t)second))
           {
             case OnlyOpcode::IRet:
               inInterrupt = false;
