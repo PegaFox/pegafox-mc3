@@ -31,14 +31,14 @@ int main(int argc, char* argv[])
       std::cout << pf::intToHexStr(uint16_t(i), "") << '\t';
 
       std::cout << (program[i] >> 7) << ((program[i] >> 6) & 1) << ((program[i] >> 5) & 1) << ((program[i] >> 4) & 1) << ((program[i] >> 3) & 1);
-      switch (opcodeTypes[program[i] >> 11])
+      switch (opcodeTypes[program[i] >> 3])
       {
         case OperationType::NoOperands:
-          std::cout << ' ' << (program[i] >> 2) << ((program[i] >> 1) & 1) << (program[i] & 1) << ((program[i+1] >> 7) & 1) << ((program[i+1] >> 6) & 1) << ((program[i+1] >> 5) & 1) << ((program[i+1] >> 4) & 1) << ((program[i+1] >> 3) & 1) << ((program[i+1] >> 2) & 1) << ((program[i+1] >> 1) & 1) << (program[i+1] & 1);
+          std::cout << ' ' << pf::intToHexStr(uint16_t((uint16_t(program[i] & 0x7) << 8) | program[i+1])).erase(2, 1);
           break;
         case OperationType::OneOperand:
           std::cout << ' ' << (program[i] & 0x7);
-          std::cout << ' ' << ((program[i+1] >> 7) & 1) << ((program[i+1] >> 6) & 1) << ((program[i+1] >> 5) & 1) << ((program[i+1] >> 4) & 1) << ((program[i+1] >> 3) & 1) << ((program[i+1] >> 2) & 1) << ((program[i+1] >> 1) & 1) << (program[i+1] & 1);
+          std::cout << ' ' << pf::intToHexStr(program[i+1]);
           break;
         case OperationType::ValueOperand:
           std::cout << ' ' << (program[i] & 0x7);
