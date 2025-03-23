@@ -4,3 +4,6 @@
 [submodule "mc3_tools/emulator/gui-lib"]
 	path = mc3_tools/emulator/gui-lib
 	url = https://github.com/PegaFox/gui-lib
+[submodule "mc3_tools/C_compiler/c-compiler-lib"]
+	path = mc3_tools/C_compiler/c-compiler-lib
+	url = git@github.com:PegaFox/c-compiler-lib

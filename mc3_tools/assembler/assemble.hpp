@@ -62,7 +62,15 @@ uint16_t parseInt(std::map<std::string, std::array<uint16_t, 2>>& variables, con
 
 std::vector<uint8_t> parseArray(const std::string& token)
 {
+  std::vector<uint8_t> result;
 
+  if (token[0] >= '0' && token[0] <= '9')
+  {
+    uint64_t value = std::stoll(token);
+    result.insert(result.end(), {uint8_t(value), uint8_t(value >> 8), uint8_t(value >> 16), uint8_t(value >> 24), uint8_t(value >> 32), uint8_t(value >> 40), uint8_t(value >> 48), uint8_t(value >> 56)});
+  }
+
+  return result;
 }
 
 uint8_t getReg3Off5(const std::vector<std::string>& tokens, std::size_t& t, std::map<std::string, std::array<uint16_t, 2>>& variables, std::string* varName = nullptr)
@@ -374,6 +382,7 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
       {
         t++;
         variables[name][0] = parseInt(variables, tokens[++t]);
+        binary.reserve(variables[name][0]+variables[name][1]);
       } else
       {
         variables[name][0] = pos;
@@ -384,7 +393,7 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
         t++;
         std::vector<uint8_t> data = parseArray(tokens[++t]);
 
-        for (std::size_t i = 0; i < data.size(); i++)
+        for (std::size_t i = 0; i < glm::min(variables[name][1], uint16_t(data.size())); i++)
         {
           program[(variables[name][0]+i) >> 1].first[(variables[name][0]+i) & 1] = data[i];
         }
@@ -397,6 +406,9 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
     } else if (tokens[t].back() == ':')
     {
       variables[tokens[t].substr(0, tokens[t].size()-1)][0] = pos;
+    } else
+    {
+      std::cerr << "ERROR: Unrecognized token '" << tokens[t] << "'\n";
     }
 
     binary.reserve(pos);
