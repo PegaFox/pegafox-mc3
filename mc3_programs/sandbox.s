@@ -20,9 +20,9 @@ setup_screen:
   set m0 0x00
   put m0 1@m2
 
-  set m0 0x70
   put m0 1@m2+2
 
+  set m0 0x03
   put m0 1@m2+4
 
 
