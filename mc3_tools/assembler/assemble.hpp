@@ -1,3 +1,14 @@
+#include <cstdint>
+#include <iostream>
+#include <string>
+#include <array>
+#include <vector>
+#include <map>
+
+#include <glm/common.hpp>
+
+#include "../mc3_utils.hpp"
+
 bool isReg(const std::string& reg)
 {
   if (reg.size() == 2)

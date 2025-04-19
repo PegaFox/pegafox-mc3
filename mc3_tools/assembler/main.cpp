@@ -1,7 +1,4 @@
 #include <iostream>
-#include <vector>
-#include <array>
-#include <map>
 #include <string>
 
 #define USE_PEGAFOX_UTILS_IMPLEMENTATION
@@ -10,7 +7,7 @@
 std::string inputFilename = "../../mc3_programs/sandbox.s";
 std::string outputFilename = "a.out";
 
-#include "../mc3_utils.hpp"
+bool rawBinary = false;
 
 #include "handle_args.hpp"
 
@@ -19,6 +16,8 @@ std::string outputFilename = "a.out";
 #include "tokenize.hpp"
 
 #include "assemble.hpp"
+
+#include "format_elf.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -37,6 +36,11 @@ int main(int argc, char *argv[])
   std::vector<std::string> tokens = tokenize(processed);
 
   std::vector<uint8_t> binary = assemble(tokens);
+
+  /*if (!rawBinary)
+  {
+    binary = formatELF(binary);
+  }*/
 
   std::filebuf file;
   file.open(outputFilename, std::ios::out | std::ios::binary);

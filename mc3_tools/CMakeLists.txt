@@ -20,4 +20,4 @@ target_link_libraries(mc3cc PRIVATE c-compiler-lib)
 
 target_link_libraries(mc3emu PRIVATE gui-lib sfml-graphics sfml-window sfml-system sfml-audio)
 
-configure_file(emulator/3270NerdFontMono-Regular.ttf 3270NerdFontMono-Regular.ttf COPYONLY)
+configure_file(emulator/PublicPixel.ttf PublicPixel.ttf COPYONLY)

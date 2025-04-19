@@ -1,5 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
+#include <cstring>
 #include <iostream>
 #include <string>
 
@@ -114,6 +115,11 @@ int main(int argc, char *argv[])
       debugWindow.update();
     }
 
+    if (std::memcmp(ram.memory, program.data(), 0xF5) != 0)
+    {
+      std::cerr << "invalid memory write\n";
+      debugWindow.pause = true;
+    }
     //std::cout << '\r' << ((uint16_t)ram.memory[0x0011] | ((uint16_t)ram.memory[0x0012] << 8)) << std::flush;
   }
 

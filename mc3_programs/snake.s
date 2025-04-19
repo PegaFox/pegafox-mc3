@@ -148,6 +148,8 @@ main_loop:
     ~set m0 1@m0
     ~xor d0 m0
     ~xor d0 m1
+
+    set m0 foodPos
     put d0 1@m0
     remove_tail_end:
 

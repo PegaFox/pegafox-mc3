@@ -14,9 +14,10 @@ Usage:
   mc3emu [options] <file>
 
 Options:
-  -h, --help  Show this help text
+  -h, --help                     Show this help text
   -d [device], --debug [device]  Show debug window for specified device, or cpu if omitted
     Possible devices: all, cpu, ram, vga, tty, hdd, keyboard, mouse, speaker
+  -p, --protect                  Protect memory regions and halt the processor if memory is illegaly written to
 
 Examples:
 
@@ -43,7 +44,7 @@ void handleArgs(int argc, char* argv[])
     if (arg == "--help" || arg == "-h")
     {
       showHelp();
-    } else if (arg == "--debug" ||  arg == "-d")
+    } else if (arg == "--debug" || arg == "-d")
     {
       debugWindow.create();
       i++;
@@ -84,6 +85,9 @@ void handleArgs(int argc, char* argv[])
         debugWindow.enabledModes.cpu = true;
         i--;
       }
+    } else if (arg == "--protect" || arg == "-p")
+    {
+
     } else
     {
       filename = arg;

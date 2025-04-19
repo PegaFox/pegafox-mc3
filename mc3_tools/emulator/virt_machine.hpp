@@ -1,3 +1,6 @@
+#ifndef EMULATOR_VIRT_MACHINE_HPP
+#define EMULATOR_VIRT_MACHINE_HPP
+
 #include <cstdint>
 #include <array>
 
@@ -351,3 +354,5 @@ class VirtMachine
       regs[0] = intQueue.pop();
     }
 };
+
+#endif // EMULATOR_VIRT_MACHINE_HPP

@@ -3,10 +3,14 @@
 
 #include <iostream>
 #include <SFML/Graphics/RenderWindow.hpp>
+#include <pegafox/utils.hpp>
 #include "gui-lib/gui.hpp"
 #include "../disassembler/disassemble_instruction.hpp"
+#include "virt_machine.hpp"
+#include "emu-utils/ram.hpp"
 
 extern VirtMachine vm;
+extern RAM<0xFF00> ram;
 
 class DebugWindow
 {
@@ -22,6 +26,8 @@ class DebugWindow
       bool mouse: 1;
       bool speaker: 1;
     } enabledModes = {0, 0, 0, 0, 0, 0, 0, 0};
+
+    bool pause = false;
 
     DebugWindow()
     {
@@ -243,7 +249,6 @@ class DebugWindow
       }
     }
   private:
-    bool pause = false;
     bool step = false;
     pfui::Window* activeWindow = nullptr;
 
