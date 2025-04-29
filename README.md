@@ -27,6 +27,7 @@ instruction formats:
   opcode(5) + secondaryOpcode(11)
   opcode(5) + reg(3) + secondaryOpcode(8)
   opcode(5) + reg(3) + value(8)
+  opcode(5) + reg(3) + reg(3) + reg(3) + valueBit(1) + useValue(1)
   opcode(5) + reg(3) + reg(3) + value(5)
   opcode(5) + reg(3) + reg(2) + value(6)
 
@@ -42,13 +43,28 @@ instruction formats:
   0x01 READ flags TO reg(3)
   0x02 SET interruptVector TO reg(3)
 
-01000 OR reg(3) WITH reg(3)+signedValue(5)
-01001 AND reg(3) WITH reg(3)+signedValue(5)
-01010 XOR reg(3) WITH reg(3)+signedValue(5)
-01011 LSHIFT reg(3) BY reg(3)+signedValue(5)
-01100 RSHIFT reg(3) BY reg(3)+signedValue(5)
-01101 ADD reg(3)+signedValue(5) TO reg(3)
-01110 SUB reg(3)+signedValue(5) FROM reg(3)
+// 01000 OR reg(3) WITH reg(3)+signedValue(5)
+// 01001 AND reg(3) WITH reg(3)+signedValue(5)
+// 01010 XOR reg(3) WITH reg(3)+signedValue(5)
+// 01011 LSHIFT reg(3) BY reg(3)+signedValue(5)
+// 01100 RSHIFT reg(3) BY reg(3)+signedValue(5)
+// 01101 ADD reg(3)+signedValue(5) TO reg(3)
+// 01110 SUB reg(3)+signedValue(5) FROM reg(3)
+
+01000 SET reg(3) TO reg(3) | reg(3) 00
+01000 SET reg(3) TO reg(3) | value(4) 1
+01001 SET reg(3) TO reg(3) & reg(3) 00
+01001 SET reg(3) TO reg(3) & value(4) 1
+01010 SET reg(3) TO reg(3) ^ reg(3) 00
+01010 SET reg(3) TO reg(3) ^ value(4) 1
+01011 SET reg(3) TO reg(3) << reg(3) 00
+01011 SET reg(3) TO reg(3) << value(4) 1
+01100 SET reg(3) TO reg(3) >> reg(3) 00
+01100 SET reg(3) TO reg(3) >> value(4) 1
+01101 SET reg(3) TO reg(3) + reg(3) 00
+01101 SET reg(3) TO reg(3) + value(4) 1
+01110 SET reg(3) TO reg(3) - reg(3) 00
+01110 SET reg(3) TO reg(3) - value(4) 1
 
 01111 SET reg(3) to reg(3)+signedValue(5)
 10000 SET reg(3) TO value(8)

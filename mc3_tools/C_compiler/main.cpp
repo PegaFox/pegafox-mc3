@@ -20,8 +20,16 @@
 
 #include "c-compiler-lib/C_compiler.hpp"
 
+#include "assemble_ir.hpp"
+
+#include "../assembler/assemble.hpp"
+
+#include "../disassembler/disassemble_instruction.hpp"
+
 int main(int argc, char* argv[])
 {
+  outputFilename = "a.out";
+
   /*#ifndef NDEBUG
   {
     argc = 4;
@@ -40,8 +48,6 @@ int main(int argc, char* argv[])
   {
     return -1;
   }
-
-  outputFilename = doAssemble ? "out.mcfunction" : "out.mc1";
 
   std::string fileText = loadFile(inputFilename);
 
@@ -82,6 +88,23 @@ int main(int argc, char* argv[])
 
     fileText = printIR(asmCode);
     std::cout << "Intermediate Representation:\n" << fileText << '\n';
+
+    std::vector<std::string> assembly = assembleIR(asmCode);
+
+    std::vector<uint8_t> binary = assemble(assembly);
+
+    std::cout << "Assembly: \n";
+    for (uint16_t i = 0; i < binary.size()-1; i += 2)
+    {
+      std::cout << disassembleInstruction(binary[i], binary[i+1]) << "\n";
+    }
+
+    std::filebuf file;
+    file.open(outputFilename, std::ios::out | std::ios::binary);
+
+    file.sputn((char*)binary.data(), binary.size());
+
+    file.close();
   }
 
   return 0;

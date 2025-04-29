@@ -29,13 +29,6 @@ main_loop:
     set d2 move_snake
     set m0 1@m2+14
 
-    jz d2
-
-    set d0 key_released
-    set d1 m0
-    sub d1 0xF0
-    jz d0
-
     set m1 snakeDir
 
     set d0 key_left
@@ -58,32 +51,37 @@ main_loop:
     sub d1 0x1B
     jz d0
 
+    set d1 1@m1
+
+    set d0 key_released
+    set d3 m0
+    sub d3 0xF0
+    jz d0
+
     jnz d2 
     
     key_left:
       set d1 0xFF
-      put d1 1@m1
       jnz d2
 
     key_right:
       set d1 0x01
-      put d1 1@m1
       jnz d2
 
     key_up:
       set d1 0xF0
-      put d1 1@m1
       jnz d2
 
     key_down:
       set d1 0x10
-      put d1 1@m1
       jnz d2
     
     key_released: ~ this must be at the end of input checking so it can lead to the next section
       set m0 1@m2+14
 
   move_snake:
+    put d1 1@m1 ~ update snakeDir with the determined direction
+
     ~ retrieve snakeDir
     set m0 snakeDir
     set d0 1@m0

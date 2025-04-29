@@ -217,7 +217,7 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
         program[pos >> 1].first[0] = (uint8_t(Opcode::SingleOp) << 3) | mainReg;
 
         program[pos >> 1].first[1] = (uint8_t)SingleOpcode::GetF;
-      } else if (tokens[t].find('@') == std::string::npos && tokens[t+1].find('@') == std::string::npos)
+      } else if (tokens[t].find('@') == std::string::npos && (tokens.size() == t+1 || tokens[t+1].find('@') == std::string::npos))
       {
         uint16_t value = parseInt(variables, tokens[t], &program[pos >> 1].second);
 
@@ -244,7 +244,7 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
         } else
         {
           program[pos >> 1].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
-          program[pos >> 1].first[1] = value & 0xFF00;
+          program[pos >> 1].first[1] = value >> 8;
           pos += 2;
 
           program[pos >> 1].first[0] = (uint8_t(Opcode::LshVal) << 3) | mainReg;
