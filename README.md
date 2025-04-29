@@ -66,7 +66,7 @@ instruction formats:
 01110 SET reg(3) TO reg(3) - reg(3) 00
 01110 SET reg(3) TO reg(3) - value(4) 1
 
-01111 SET reg(3) to reg(3)+signedValue(5)
+// 01111 SET reg(3) to reg(3)+signedValue(5)
 10000 SET reg(3) TO value(8)
 
 10001 READ BYTE mem[reg(2)+signedValue(6)] TO reg(3)
