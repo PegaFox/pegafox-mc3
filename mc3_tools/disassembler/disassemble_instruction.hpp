@@ -18,7 +18,6 @@ std::string disassembleInstruction(uint8_t firstByte, uint8_t secondByte)
     "rsh ", //RshReg
     "add ", //AddReg
     "sub ", //SubReg
-    "set ", //SetReg
     "set ", //SetVal
     "set ", //LodB
     "set ", //LodW
@@ -93,21 +92,19 @@ std::string disassembleInstruction(uint8_t firstByte, uint8_t secondByte)
         result += "r" + std::to_string(firstByte & 0x7) + " " + std::to_string(secondByte);
       }
       break;
-    case OperationType::RegValue:
+    case OperationType::Reg3:
       result += "r" + std::to_string(firstByte & 0x7) + " r" + std::to_string(secondByte >> 5);
-      if (secondByte & 0x1F)
+      
+      if (secondByte & 1)
       {
-        if (secondByte & 0x10)
-        {
-          result += std::to_string(int8_t(secondByte << 3) >> 3);
-        } else
-        {
-          result += "+" + std::to_string(secondByte & 0x1F);
-        }
+        result += " " + std::to_string((secondByte >> 1) & 0xF);
+      } else
+      {
+        result += " r" + std::to_string((secondByte >> 2) & 0x7);
       }
       break;
-    case OperationType::RegValueExt:
-      result += "r" + std::to_string(firstByte & 0x7) + " @m" + std::to_string(secondByte >> 6);
+    case OperationType::RegValue:
+      result += "r" + std::to_string(firstByte & 0x7) + " " + std::to_string(1 + ((firstByte >> 3) & 1)) + "@m" + std::to_string(secondByte >> 6);
       if (secondByte & 0x3F)
       {
         if (secondByte & 0x20)

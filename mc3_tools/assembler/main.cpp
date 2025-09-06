@@ -1,8 +1,7 @@
 #include <iostream>
 #include <string>
-
-#define USE_PEGAFOX_UTILS_IMPLEMENTATION
-#include <pegafox/utils.hpp>
+#include <sstream>
+#include <fstream>
 
 std::string inputFilename = "../../mc3_programs/sandbox.s";
 std::string outputFilename = "a.out";
@@ -29,9 +28,14 @@ int main(int argc, char *argv[])
     return -1;
   }
 
-  std::string assembly = pf::getFileText(inputFilename);
+  std::ifstream inputFile(inputFilename);
 
-  std::string processed = preprocess(assembly);
+  std::stringstream assembly;
+  assembly << inputFile.rdbuf();
+
+  inputFile.close();
+
+  std::string processed = preprocess(assembly.str());
 
   std::vector<std::string> tokens = tokenize(processed);
 

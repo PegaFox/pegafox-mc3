@@ -2,8 +2,8 @@
 #define EMULATOR_DEBUG_WINDOW_HPP
 
 #include <iostream>
+#include <format>
 #include <SFML/Graphics/RenderWindow.hpp>
-#include <pegafox/utils.hpp>
 #include "gui-lib/gui.hpp"
 #include "../disassembler/disassemble_instruction.hpp"
 #include "virt_machine.hpp"
@@ -138,48 +138,52 @@ class DebugWindow
         if (enabledModes.cpu)
         {
           std::string winData;
-          winData += "m0:" + pf::intToHexStr(vm.regs[0]) + " ";
-          winData += "m1:" + pf::intToHexStr(vm.regs[1]) + "\n";
-          winData += "m2:" + pf::intToHexStr(vm.regs[2]) + " ";
-          winData += "m3:" + pf::intToHexStr(vm.regs[3]) + "\n";
+          winData += "m0:" + std::format("{:X}", vm.regs[0]) + " ";
+          winData += "m1:" + std::format("{:X}", vm.regs[1]) + "\n";
+          winData += "m2:" + std::format("{:X}", vm.regs[2]) + " ";
+          winData += "m3:" + std::format("{:X}", vm.regs[3]) + "\n";
 
-          winData += "d0:" + pf::intToHexStr(vm.regs[4]) + " ";
-          winData += "d1:" + pf::intToHexStr(vm.regs[5]) + "\n";
-          winData += "d2:" + pf::intToHexStr(vm.regs[6]) + " ";
-          winData += "d3:" + pf::intToHexStr(vm.regs[7]) + "\n";
+          winData += "d0:" + std::format("{:X}", vm.regs[4]) + " ";
+          winData += "d1:" + std::format("{:X}", vm.regs[5]) + "\n";
+          winData += "d2:" + std::format("{:X}", vm.regs[6]) + " ";
+          winData += "d3:" + std::format("{:X}", vm.regs[7]) + "\n";
 
-          winData += "pc:" + pf::intToHexStr(vm.pc) + " ";
-          winData += "iv:" + pf::intToHexStr(vm.intVec) + "\n";
+          winData += "pc:" + std::format("{:X}", vm.pc) + " ";
+          winData += "iv:" + std::format("{:X}", vm.intVec) + "\n";
 
           winData += "c:" + std::to_string(vm.flags.carry) + " ";
           winData += "o:" + std::to_string(vm.flags.overflow) + " ";
           winData += "z:" + std::to_string(vm.flags.zero) + " ";
           winData += "s:" + std::to_string(vm.flags.sign) + " ";
-          winData += "b:0x" + std::string(1, pf::intToHexStr(vm.flags.bitsSet, "").back()) + "\n";
+
+          uint8_t bitsSet = vm.flags.bitsSet;
+          winData += "b:" + std::string(1, std::format("{:X}", bitsSet).back()) + "\n";
         
           winData += "IntBackup:\n";
-          winData += "m0:" + pf::intToHexStr(vm.intState.regs[0]) + " ";
-          winData += "m1:" + pf::intToHexStr(vm.intState.regs[1]) + "\n";
-          winData += "m2:" + pf::intToHexStr(vm.intState.regs[2]) + " ";
-          winData += "m3:" + pf::intToHexStr(vm.intState.regs[3]) + "\n";
+          winData += "m0:" + std::format("{:X}", vm.intState.regs[0]) + " ";
+          winData += "m1:" + std::format("{:X}", vm.intState.regs[1]) + "\n";
+          winData += "m2:" + std::format("{:X}", vm.intState.regs[2]) + " ";
+          winData += "m3:" + std::format("{:X}", vm.intState.regs[3]) + "\n";
 
-          winData += "d0:" + pf::intToHexStr(vm.intState.regs[4]) + " ";
-          winData += "d1:" + pf::intToHexStr(vm.intState.regs[5]) + "\n";
-          winData += "d2:" + pf::intToHexStr(vm.intState.regs[6]) + " ";
-          winData += "d3:" + pf::intToHexStr(vm.intState.regs[7]) + "\n";
+          winData += "d0:" + std::format("{:X}", vm.intState.regs[4]) + " ";
+          winData += "d1:" + std::format("{:X}", vm.intState.regs[5]) + "\n";
+          winData += "d2:" + std::format("{:X}", vm.intState.regs[6]) + " ";
+          winData += "d3:" + std::format("{:X}", vm.intState.regs[7]) + "\n";
 
-          winData += "pc:" + pf::intToHexStr(vm.intState.pc) + " ";
+          winData += "pc:" + std::format("{:X}", vm.intState.pc) + " ";
           winData += "i:" + std::to_string(vm.inInterrupt) + "\n";
 
           winData += "c:" + std::to_string(vm.intState.flags.carry) + " ";
           winData += "o:" + std::to_string(vm.intState.flags.overflow) + " ";
           winData += "z:" + std::to_string(vm.intState.flags.zero) + " ";
           winData += "s:" + std::to_string(vm.intState.flags.sign) + " ";
-          winData += "b:0x" + std::string(1, pf::intToHexStr(vm.intState.flags.bitsSet, "").back()) + "\n";
+
+          bitsSet = vm.intState.flags.bitsSet;
+          winData += "b:" + std::string(1, std::format("{:X}", bitsSet).back()) + "\n";
 
           for (uint8_t i = 0; i < vm.intQueue.size(); i++)
           {
-            winData += "q" + std::to_string(i) + ":" + pf::intToHexStr(vm.intQueue[i]) + (i%2 ? "\n" : " ");
+            winData += "q" + std::to_string(i) + ":" + std::format("{:X}", vm.intQueue[i]) + (i%2 ? "\n" : " ");
           }
           
           ((pfui::Paragraph*)subWindows[0][0])->text.setString(winData);
@@ -191,7 +195,7 @@ class DebugWindow
 
           for (uint32_t b = ((pfui::Paragraph*)subWindows[1][0])->drawStart; b < ((pfui::Paragraph*)subWindows[1][0])->drawStart+22; b++)
           {
-            winData += pf::intToHexStr(uint16_t(b), "") + ":" + pf::intToHexStr(ram.memory[b], "");
+            winData += std::format("{:04X}:{:02X}", uint16_t(b), ram.memory[b]);
             if (b%2)
             {
               winData += (b == vm.pc+1 ? ">" : " ") + disassembleInstruction(ram.memory[b-1], ram.memory[b]);

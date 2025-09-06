@@ -1,3 +1,5 @@
+#include <string>
+
 void removeComments(std::string& assembly)
 {
   std::size_t pos = 0;

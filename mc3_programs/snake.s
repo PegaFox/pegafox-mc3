@@ -183,9 +183,9 @@ main_loop:
       inc m0
       and m0 0xFF
       or m0 d0
-      set d1 m0
-      
-      sub d1 d2
+
+      sub d1 m0 d2
+
       jnz d3
 
   set d0 main_loop

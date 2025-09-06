@@ -9,6 +9,9 @@
 
 #include "../mc3_utils.hpp"
 
+typedef std::pair<std::array<uint8_t, 2>, std::string> asmOperation;
+typedef std::array<asmOperation, INT16_MAX+1> asmProgram;
+
 bool isReg(const std::string& reg)
 {
   if (reg.size() == 2)
@@ -71,27 +74,45 @@ uint16_t parseInt(std::map<std::string, std::array<uint16_t, 2>>& variables, con
   return 0;
 }
 
-std::vector<uint8_t> parseArray(const std::string& token)
+// After execution, t is the index of the last token consumed
+std::vector<uint8_t> parseArray(const std::vector<std::string>& tokens, std::size_t& t)
 {
   std::vector<uint8_t> result;
 
-  if (token[0] >= '0' && token[0] <= '9')
+  while (t < tokens.size() && tokens[t][0] >= '0' && tokens[t][0] <= '9')
   {
-    uint64_t value = std::stoll(token);
-    result.insert(result.end(), {uint8_t(value), uint8_t(value >> 8), uint8_t(value >> 16), uint8_t(value >> 24), uint8_t(value >> 32), uint8_t(value >> 40), uint8_t(value >> 48), uint8_t(value >> 56)});
+    uint64_t value = std::stoll(tokens[t], nullptr, 0);
+
+    for (uint8_t o = 0; o < 64; o += 8)
+    {
+      if (uint8_t(value >> o))
+      {
+        result.emplace_back(uint8_t(value >> o));
+      }
+    }
+
+    t++;
   }
+  t--;
 
   return result;
 }
 
-uint8_t getReg3Off5(const std::vector<std::string>& tokens, std::size_t& t, std::map<std::string, std::array<uint16_t, 2>>& variables, std::string* varName = nullptr)
+uint8_t getReg3(const std::vector<std::string>& tokens, std::size_t& t, uint8_t firstReg, std::map<std::string, std::array<uint16_t, 2>>& variables, std::string* varName = nullptr)
 {
   uint8_t out = getReg(tokens[t]) << 5;
 
-  if (tokens[t+1] == "+" || tokens[t+1] == "-")
+  if (isReg(tokens[t+1]))
   {
     t++;
-    out |= tokens[t] == "+" ? parseInt(variables, tokens[++t], varName) & 0x1F : -parseInt(variables, tokens[++t], varName) & 0x1F;
+    out |= getReg(tokens[t]) << 2;
+  } else if (tokens[t+1][0] >= '0' && tokens[t+1][0] <= '9')
+  {
+    t++;
+    out |= (parseInt(variables, tokens[t], varName) << 1) | 1;
+  } else
+  {
+    out = (firstReg << 5) | (out >> 3);
   }
 
   return out;
@@ -110,9 +131,9 @@ uint8_t getReg2Off6(const std::vector<std::string>& tokens, std::size_t& t, std:
   return out;
 }
 
-std::pair<std::array<uint8_t, 2>, std::string> getALUbinaryOperation(const std::vector<std::string>& tokens, std::size_t& t, std::map<std::string, std::array<uint16_t, 2>>& variables, Opcode regCode, Opcode valCode)
+asmOperation getALUbinaryOperation(const std::vector<std::string>& tokens, std::size_t& t, std::map<std::string, std::array<uint16_t, 2>>& variables, Opcode regCode, Opcode valCode)
 {
-  std::pair<std::array<uint8_t, 2>, std::string> operation;
+  asmOperation operation;
 
   uint8_t mainReg = getReg(tokens[t++]);
 
@@ -120,7 +141,7 @@ std::pair<std::array<uint8_t, 2>, std::string> getALUbinaryOperation(const std::
   {
     operation.first[0] = (uint8_t(regCode) << 3) | mainReg;
 
-    operation.first[1] = getReg3Off5(tokens, t, variables, &operation.second);
+    operation.first[1] = getReg3(tokens, t, mainReg, variables, &operation.second);
   } else
   {
     operation.first[0] = (uint8_t(valCode) << 3) | mainReg;
@@ -143,15 +164,15 @@ std::array<uint8_t, 2> getUnaryOperation(const std::vector<std::string>& tokens,
   return operation;
 }
 
-std::pair<std::array<uint8_t, 2>, std::string> getJumpOperation(const std::vector<std::string>& tokens, std::size_t& t, std::map<std::string, std::array<uint16_t, 2>>& variables, Opcode opcode)
+asmOperation getJumpOperation(const std::vector<std::string>& tokens, std::size_t& t, std::map<std::string, std::array<uint16_t, 2>>& variables, Opcode opcode)
 {
-  std::pair<std::array<uint8_t, 2>, std::string> operation;
+  asmOperation operation;
 
   uint8_t mainReg = getReg(tokens[t]);
 
   operation.first[0] = (uint8_t(opcode) << 3) | mainReg;
 
-  if (tokens[t+1] == "+" || tokens[t+1] == "-")
+  if (t < tokens.size()-1 && (tokens[t+1] == "+" || tokens[t+1] == "-"))
   {
     t++;
     operation.first[1] = tokens[t] == "+" ? parseInt(variables, tokens[++t], &operation.second) & 0xFF : -parseInt(variables, tokens[++t], &operation.second) & 0xFF;
@@ -160,9 +181,206 @@ std::pair<std::array<uint8_t, 2>, std::string> getJumpOperation(const std::vecto
   return operation;
 }
 
+std::array<asmOperation, 3> getSetImmediateOperation(uint8_t mainReg, uint16_t value, uint8_t minCommandCount = 1)
+{
+  std::array<asmOperation, 3> operations;
+  uint8_t commandCount;
+
+  if ((value & 0xFF) == value)
+  {
+    commandCount = 1;
+
+    operations[0].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
+    operations[0].first[1] = value;
+  } else if ((value & 0xFF00) == value)
+  {
+    commandCount = 2;
+
+    operations[0].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
+    operations[0].first[1] = value >> 8;
+
+    operations[1].first[0] = (uint8_t(Opcode::LshVal) << 3) | mainReg;
+    operations[1].first[1] = 8;
+  } else if (value > 0xFF00)
+  {
+    commandCount = 2;
+
+    operations[0].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
+    operations[0].first[1] = 0;
+
+    operations[1].first[0] = (uint8_t(Opcode::SubVal) << 3) | mainReg;
+    operations[1].first[1] = -(value & 0xFF);
+  } else
+  {
+    commandCount = 3;
+
+    operations[0].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
+    operations[0].first[1] = value >> 8;
+
+    operations[1].first[0] = (uint8_t(Opcode::LshVal) << 3) | mainReg;
+    operations[1].first[1] = 8;
+
+    operations[2].first[0] = (uint8_t(Opcode::AddVal) << 3) | mainReg;
+    operations[2].first[1] = value & 0xFF;
+  }
+
+  while (commandCount < minCommandCount)
+  {
+    operations[commandCount].first[0] = (uint8_t(Opcode::AddReg) << 3) | 0;
+    operations[commandCount].first[1] = 0;
+
+    commandCount++;
+  }
+
+  return operations;
+}
+
+
+asmProgram resolveLabels(asmProgram program, std::map<std::string, std::array<uint16_t, 2>>& variables, uint16_t& currentBinarySize)
+{
+  uint16_t iterations = 0;
+  bool changed = true;
+  while (changed)
+  {
+    changed = false;
+
+    for (uint16_t o = 0; o < program.size(); o++)
+    {
+      if (!program[o].second.empty())
+      {
+        if (!variables.contains(program[o].second))
+        {
+          std::cerr << "ERROR: Label/Variable '" << program[o].second << "' not defined\n";
+          exit(-4);
+        }
+
+        uint8_t operationChainLength = 1;
+        if (program[o+1].second == program[o].second)
+        {
+          operationChainLength++;
+          if (program[o+2].second == program[o].second)
+          {
+            operationChainLength++;
+          }
+        }
+
+        std::map<std::string, std::array<uint16_t, 2>>::iterator var = variables.find(program[o].second);
+        switch (Opcode(program[o].first[0] >> 3))
+        {
+          case Opcode::OrVal:
+          case Opcode::AndVal:
+          case Opcode::XorVal:
+          case Opcode::LshVal:
+          case Opcode::RshVal:
+          case Opcode::AddVal:
+          case Opcode::SubVal:
+          case Opcode::SetVal:
+          /*case Opcode::JmpZ:
+          case Opcode::JmpNz:
+          case Opcode::JmpC:
+          case Opcode::JmpNc:
+          case Opcode::JmpS:
+          case Opcode::JmpNs:
+          case Opcode::JmpO:
+          case Opcode::JmpNo:*/ {
+            std::array<asmOperation, 3> operations = getSetImmediateOperation(program[o].first[0] & 0x7, variables[program[o].second][0], 1 + iterations/200);
+
+            uint8_t operationSize = 1;
+            if (operations[1].first[0] != 0x00)
+            {
+              operationSize++;
+              if (operations[2].first[0] != 0x00)
+              {
+                operationSize++;
+              }
+            }
+
+            if (operationSize != operationChainLength)
+            {
+              changed = true;
+              if (operationSize > operationChainLength)
+              {
+                std::move_backward(program.data()+o, program.end()-3, program.end()-(3-(operationSize-operationChainLength)));
+                currentBinarySize += (operationSize-operationChainLength)*2;
+              } else if (operationSize < operationChainLength)
+              {
+                std::move(program.data()+o+operationChainLength, program.end(), program.data()+o+operationSize);
+                currentBinarySize -= (operationChainLength-operationSize)*2;
+              }
+
+              for (std::pair<const std::string, std::array<uint16_t, 2>>& variable: variables)
+              {
+                if (variable.second[0] > o << 1)
+                {
+                  variable.second[0] += (operationSize-operationChainLength) << 1;
+                }
+              }
+            }
+
+            if (program[o].first != operations[0].first)
+            {
+              changed = true;
+            }
+
+            program[o].first = operations[0].first;
+            program[o].second = var->first;
+            if (operationSize > 1)
+            {
+              if (program[o+1].first != operations[1].first)
+              {
+                changed = true;
+              }
+                
+              program[o+1].first = operations[1].first;
+              program[o+1].second = var->first;
+              if (operationSize > 2)
+              {
+                if (program[o+2].first != operations[2].first)
+                {
+                  changed = true;
+                }
+
+                program[o+2].first = operations[2].first;
+                program[o+2].second = var->first;
+              }
+            }
+
+            o += operationSize-1;
+            break;
+          } /*case Opcode::OrReg:
+          case Opcode::AndReg:
+          case Opcode::XorReg:
+          case Opcode::LshReg:
+          case Opcode::RshReg:
+          case Opcode::AddReg:
+          case Opcode::SubReg:
+          case Opcode::SetReg:*/
+            program[o].first[1] = (program[o].first[1]&0b11100000) | (((program[o].first[1]&0b11111) + var->second[0]) & 0b11111);
+            break;
+          case Opcode::LodB:
+          case Opcode::LodW:
+          case Opcode::StrB:
+          case Opcode::StrW:
+
+            program[o].first[1] = (program[o].first[1]&0b11000000) | (((program[o].first[1]&0b111111) + var->second[0]) & 0b111111);
+            break;
+          case Opcode::SingleOp:
+            std::cerr << "ERROR: Unexpected Label/Variable name '" << program[o].second << "' in instruction requiring no operands\n";
+            exit(-5);
+            break;
+        }
+      }
+    }
+
+    iterations++;
+  }
+
+  return program;
+}
+
 std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
 {
-  std::array<std::pair<std::array<uint8_t, 2>, std::string>, INT16_MAX+1> program;
+  asmProgram program;
 
   std::map<std::string, std::array<uint16_t, 2>> variables;
 
@@ -210,8 +428,10 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
 
       if (isReg(tokens[t]))
       {
-        program[pos >> 1].first[0] = (uint8_t(Opcode::SetReg) << 3) | mainReg;
-        program[pos >> 1].first[1] = getReg3Off5(tokens, t, variables, &program[pos >> 1].second);
+        program[pos >> 1].first[0] = (uint8_t(Opcode::AddReg) << 3) | mainReg;
+        program[pos >> 1].first[1] = (getReg(tokens[t]) << 5) | 1;
+        //program[pos >> 1].first[0] = (uint8_t(Opcode::SetReg) << 3) | mainReg;
+        //program[pos >> 1].first[1] = getReg3(tokens, t, mainReg, variables, &program[pos >> 1].second);
       } else if (tokens[t] == "FLAGS")
       {
         program[pos >> 1].first[0] = (uint8_t(Opcode::SingleOp) << 3) | mainReg;
@@ -221,38 +441,23 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
       {
         uint16_t value = parseInt(variables, tokens[t], &program[pos >> 1].second);
 
-        if ((value & 0xFF) == value)
+        std::array<asmOperation, 3> operations = getSetImmediateOperation(mainReg, value);
+        
+        if (operations[0].first[0] != 0x00)
         {
-          program[pos >> 1].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
-          program[pos >> 1].first[1] = value;
-        } else if ((value & 0xFF00) == value)
-        {
-          program[pos >> 1].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
-          program[pos >> 1].first[1] = value >> 8;
-          pos += 2;
+          program[pos >> 1].first = operations[0].first;
 
-          program[pos >> 1].first[0] = (uint8_t(Opcode::LshVal) << 3) | mainReg;
-          program[pos >> 1].first[1] = 8;
-        } else if (value > 0xFF00)
-        {
-          program[pos >> 1].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
-          program[pos >> 1].first[1] = 0;
-          pos += 2;
+          if (operations[1].first[0] != 0x00)
+          {
+            pos += 2;
+            program[pos >> 1].first = operations[1].first;
 
-          program[pos >> 1].first[0] = (uint8_t(Opcode::SubVal) << 3) | mainReg;
-          program[pos >> 1].first[1] = -(value & 0xFF);
-        } else
-        {
-          program[pos >> 1].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
-          program[pos >> 1].first[1] = value >> 8;
-          pos += 2;
-
-          program[pos >> 1].first[0] = (uint8_t(Opcode::LshVal) << 3) | mainReg;
-          program[pos >> 1].first[1] = 8;
-          pos += 2;
-
-          program[pos >> 1].first[0] = (uint8_t(Opcode::AddVal) << 3) | mainReg;
-          program[pos >> 1].first[1] = value & 0xFF;
+            if (operations[2].first[0] != 0x00)
+            {
+              pos += 2;
+              program[pos >> 1].first = operations[2].first;
+            }
+          }
         }
       } else
       {
@@ -291,20 +496,28 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
 
         if (tokens[t].find('@') == std::string::npos)
         {
-          locationSize = 1 + (parseInt(variables, tokens[t++]) != 1);
+          locationSize = parseInt(variables, tokens[t++]);
         }
 
-        uint8_t value = getReg2Off6(tokens, ++t, variables, &program[pos >> 1].second, &locationSize);
-
-        if (locationSize == 1)
+        if (locationSize == 1 || locationSize == 2)
         {
-          program[pos >> 1].first[0] = (uint8_t(Opcode::StrB) << 3) | mainReg;
+          uint8_t value = getReg2Off6(tokens, ++t, variables, &program[pos >> 1].second, &locationSize);
+
+          if (locationSize == 1)
+          {
+            program[pos >> 1].first[0] = (uint8_t(Opcode::StrB) << 3) | mainReg;
+          } else
+          {
+            program[pos >> 1].first[0] = (uint8_t(Opcode::StrW) << 3) | mainReg;
+          }
+
+          program[pos >> 1].first[1] = value;
         } else
         {
-          program[pos >> 1].first[0] = (uint8_t(Opcode::StrW) << 3) | mainReg;
-        }
+          getReg2Off6(tokens, ++t, variables, nullptr, nullptr);
 
-        program[pos >> 1].first[1] = value;
+          pos -= 2;
+        }
       }
       
       pos += 2;
@@ -402,7 +615,12 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
       if (tokens[t+1] == "=")
       {
         t++;
-        std::vector<uint8_t> data = parseArray(tokens[++t]);
+        std::vector<uint8_t> data = parseArray(tokens, ++t);
+
+        if (variables[name][1] == uint16_t(-1))
+        {
+          variables[name][1] = data.size();
+        }
 
         for (std::size_t i = 0; i < glm::min(variables[name][1], uint16_t(data.size())); i++)
         {
@@ -425,61 +643,12 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
     binary.reserve(pos);
   }
 
-  binary.resize(binary.capacity());
+  uint16_t binarySize = binary.capacity();
+  program = resolveLabels(program, variables, binarySize);
+
+  binary.resize(std::ceil(float(binarySize)/2.0f) * 2.0f);
   for (std::size_t i = 0; i < binary.size(); i += 2)
   {
-    if (!program[i >> 1].second.empty())
-    {
-      if (!variables.contains(program[i >> 1].second))
-      {
-        std::cerr << "ERROR: Label/Variable '" << program[i >> 1].second << "' not defined\n";
-        exit(-4);
-      }
-
-      uint16_t position = variables[program[i >> 1].second][0];
-      switch (Opcode(program[i >> 1].first[0] >> 3))
-      {
-        case Opcode::OrVal:
-        case Opcode::AndVal:
-        case Opcode::XorVal:
-        case Opcode::LshVal:
-        case Opcode::RshVal:
-        case Opcode::AddVal:
-        case Opcode::SubVal:
-        case Opcode::SetVal:
-        case Opcode::JmpZ:
-        case Opcode::JmpNz:
-        case Opcode::JmpC:
-        case Opcode::JmpNc:
-        case Opcode::JmpS:
-        case Opcode::JmpNs:
-        case Opcode::JmpO:
-        case Opcode::JmpNo:
-          program[i >> 1].first[1] += position;
-          break;
-        case Opcode::OrReg:
-        case Opcode::AndReg:
-        case Opcode::XorReg:
-        case Opcode::LshReg:
-        case Opcode::RshReg:
-        case Opcode::AddReg:
-        case Opcode::SubReg:
-        case Opcode::SetReg:
-          program[i >> 1].first[1] = (program[i >> 1].first[1]&0b11100000) | (((program[i >> 1].first[1]&0b11111) + position) & 0b11111);
-          break;
-        case Opcode::LodB:
-        case Opcode::LodW:
-        case Opcode::StrB:
-        case Opcode::StrW:
-          program[i >> 1].first[1] = (program[i >> 1].first[1]&0b11000000) | (((program[i >> 1].first[1]&0b111111) + position) & 0b111111);
-          break;
-        case Opcode::SingleOp:
-          std::cerr << "ERROR: Unexpected Label/Variable name '" << program[i >> 1].second << "' in instruction requiring no operands\n";
-          exit(-5);
-          break;
-      }
-    }
-
     binary[i] = program[i >> 1].first[0];
     binary[i+1] = program[i >> 1].first[1];
   }

@@ -67,30 +67,31 @@ instruction formats:
 01110 SET reg(3) TO reg(3) - value(4) 1
 
 // 01111 SET reg(3) to reg(3)+signedValue(5)
-10000 SET reg(3) TO value(8)
+01111 SET reg(3) TO value(8)
 
-10001 READ BYTE mem[reg(2)+signedValue(6)] TO reg(3)
-10010 READ WORD mem[reg(2)+signedValue(6)] TO reg(3)
-10011 WRITE BYTE mem[reg(2)+signedValue(6)] FROM reg(3)
-10100 WRITE WORD mem[reg(2)+signedValue(6)] FROM reg(3)
+10000 READ BYTE mem[reg(2)+signedValue(6)] TO reg(3)
+10001 READ WORD mem[reg(2)+signedValue(6)] TO reg(3)
+10010 WRITE BYTE mem[reg(2)+signedValue(6)] FROM reg(3)
+10011 WRITE WORD mem[reg(2)+signedValue(6)] FROM reg(3)
 
-10101 JUMP TO reg(3)+signedValue(8) IF (ZERO FLAG SET)
-10110 JUMP TO reg(3)+signedValue(8) IF (ZERO FLAG CLEAR)
-10111 JUMP TO reg(3)+signedValue(8) IF (CARRY FLAG SET)
-11000 JUMP TO reg(3)+signedValue(8) IF (CARRY FLAG CLEAR)
-11001 JUMP TO reg(3)+signedValue(8) IF (SIGN FLAG SET)
-11010 JUMP TO reg(3)+signedValue(8) IF (SIGN FLAG CLEAR)
-11011 JUMP TO reg(3)+signedValue(8) IF (OVERFLOW FLAG SET)
-11100 JUMP TO reg(3)+signedValue(8) IF (OVERFLOW FLAG CLEAR)
-11101 OPCODE_ONLY
+10100 JUMP TO reg(3)+signedValue(8) IF (ZERO FLAG SET)
+10101 JUMP TO reg(3)+signedValue(8) IF (ZERO FLAG CLEAR)
+10110 JUMP TO reg(3)+signedValue(8) IF (CARRY FLAG SET)
+10111 JUMP TO reg(3)+signedValue(8) IF (CARRY FLAG CLEAR)
+11000 JUMP TO reg(3)+signedValue(8) IF (SIGN FLAG SET)
+11001 JUMP TO reg(3)+signedValue(8) IF (SIGN FLAG CLEAR)
+11010 JUMP TO reg(3)+signedValue(8) IF (OVERFLOW FLAG SET)
+11011 JUMP TO reg(3)+signedValue(8) IF (OVERFLOW FLAG CLEAR)
+11100 OPCODE_ONLY
   0x000 RETURN FROM INTERRUPT
+11101
 11110
 11111
 
 HALT if going from 0xFFFF to 0
 
 I/O devices can be memory mapped to any location
-I/O devices could theoretically also trigger interrupts, but this is not implemented yet
+I/O devices could also trigger interrupts
 Devices could trigger an interrupt pin, and send a 16 bit interrupt number. This number would be stored in a shift register acting as a queue of all interrupt requests. When the CPU is not running an interrupt, it will check the queue and if there is an interrupt request, it will run the interrupt routine, storing the current processor state in temporary registers
 
 Possible I/O devices:

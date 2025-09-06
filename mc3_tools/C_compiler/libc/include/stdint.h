@@ -1,0 +1,153 @@
+#ifndef _STDINT_H
+#define _STDINT_H 1
+
+  #include <limits.h>
+
+  /* Exact-width integer types */
+  /*typedef signed char int8_t;
+  typedef unsigned char uint8_t;
+  typedef signed short int16_t;
+  typedef unsigned short uint16_t;
+  typedef signed int int32_t;
+  typedef unsigned int uint32_t;
+  typedef signed long long int64_t;
+  typedef unsigned long long uint64_t;*/
+  #define int8_t signed char
+  #define uint8_t unsigned char
+  #define int16_t signed short int
+  #define uint16_t unsigned short int
+  #define int32_t signed int
+  #define uint32_t unsigned int
+  #define int64_t signed long int
+  #define uint64_t unsigned long int
+
+  /* Minimum-width integer types */
+  /*typedef int8_t int_least8_t;
+  typedef uint8_t uint_least8_t;
+  typedef int16_t int_least16_t;
+  typedef uint16_t uint_least16_t;
+  typedef int32_t int_least32_t;
+  typedef uint32_t uint_least32_t;
+  typedef int64_t int_least64_t;
+  typedef uint64_t uint_least64_t;*/
+  #define int_least8_t int8_t
+  #define uint_least8_t uint8_t
+  #define int_least16_t int16_t
+  #define uint_least16_t uint16_t
+  #define int_least32_t int32_t
+  #define uint_least32_t uint32_t
+  #define int_least64_t int64_t
+  #define uint_least64_t uint64_t
+
+  /* Fastest minimum-width integer types */
+  /*typedef int8_t int_fast8_t;
+  typedef uint8_t uint_fast8_t;
+  typedef int16_t int_fast16_t;
+  typedef uint16_t uint_fast16_t;
+  typedef int32_t int_fast32_t;
+  typedef uint32_t uint_fast32_t;
+  typedef int64_t int_fast64_t;
+  typedef uint64_t uint_fast64_t;*/
+  #define int_fast8_t int8_t
+  #define uint_fast8_t uint8_t
+  #define int_fast16_t int16_t
+  #define uint_fast16_t uint16_t
+  #define int_fast32_t int32_t
+  #define uint_fast32_t uint32_t
+  #define int_fast64_t int64_t
+  #define uint_fast64_t uint64_t
+
+  /* Integer types capable of holding object pointers */
+  /*typedef int32_t intptr_t;
+  typedef uint32_t uintptr_t;*/
+  #define intptr_t int8_t;
+  #define uintptr_t uint8_t;
+
+  /* Greatest-width integer types */
+  /*typedef int64_t intmax_t;
+  typedef uint64_t uintmax_t;*/
+  #define intmax_t int64_t;
+  #define uintmax_t uint64_t;
+
+  /* Limits of exact-width integer types */
+  #define INT8_MIN SCHAR_MIN
+  #define INT8_MAX SCHAR_MAX
+  #define UINT8_MAX UCHAR_MAX
+
+  #define INT16_MIN SHRT_MIN
+  #define INT16_MAX SHRT_MAX
+  #define UINT16_MAX USHRT_MAX
+
+  #define INT32_MIN INT_MIN
+  #define INT32_MAX INT_MAX
+  #define UINT32_MAX UINT_MAX
+
+  #define INT64_MIN LONG_MIN
+  #define INT64_MAX LONG_MAX
+  #define UINT64_MAX ULONG_MAX
+
+  /* Limits of minimum-width integer types */
+  #define INT_LEAST8_MIN INT8_MIN
+  #define INT_LEAST8_MAX INT8_MAX
+  #define UINT_LEAST8_MAX UINT8_MAX
+
+  #define INT_LEAST16_MIN INT16_MIN
+  #define INT_LEAST16_MAX INT16_MAX
+  #define UINT_LEAST16_MAX UINT16_MAX
+
+  #define INT_LEAST32_MIN INT32_MIN
+  #define INT_LEAST32_MAX INT32_MAX
+  #define UINT_LEAST32_MAX UINT32_MAX
+
+  #define INT_LEAST64_MIN INT64_MIN
+  #define INT_LEAST64_MAX INT64_MAX
+  #define UINT_LEAST64_MAX UINT64_MAX
+
+  /* Limits of fastest minimum-width integer types */
+  #define INT_FAST8_MIN INT8_MIN
+  #define INT_FAST8_MAX INT8_MAX
+  #define UINT_FAST8_MAX UINT8_MAX
+
+  #define INT_FAST16_MIN INT16_MIN
+  #define INT_FAST16_MAX INT16_MAX
+  #define UINT_FAST16_MAX UINT16_MAX
+
+  #define INT_FAST32_MIN INT32_MIN
+  #define INT_FAST32_MAX INT32_MAX
+  #define UINT_FAST32_MAX UINT32_MAX
+
+  #define INT_FAST64_MIN INT64_MIN
+  #define INT_FAST64_MAX INT64_MAX
+  #define UINT_FAST64_MAX UINT64_MAX
+
+  /* Limits of integer types capable of holding object pointers */
+  #define INTPTR_MIN INT8_MIN
+  #define INTPTR_MAX INT8_MAX
+  #define UINTPTR_MAX UINT8_MAX
+
+  /* Limits of greatest-width integer types */
+  #define INTMAX_MIN INT64_MIN
+  #define INTMAX_MAX INT64_MAX
+  #define UINTMAX_MAX UINT64_MAX
+
+  /* Limits of other integer types */
+  #define PTRDIFF_MIN INT16_MIN
+  #define PTRDIFF_MAX INT16_MAX
+
+  #define SIZE_MAX UINT8_MAX
+
+  /* Macros for integer constants */
+  #define INT8_C(x) (x)
+  #define INT16_C(x) (x)
+  #define INT32_C(x) (x)
+  #define INT64_C(x) (x ## L)
+
+  #define UINT8_C(x) (x)
+  #define UINT16_C(x) (x)
+  #define UINT32_C(x) (x ## U)
+  #define UINT64_C(x) (x ## UL)
+
+  #define INTMAX_C(x) INT64_C(x)
+  #define UINTMAX_C(x) UINT64_C(x)
+
+#endif /* _STDINT_H */

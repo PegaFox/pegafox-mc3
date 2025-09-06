@@ -1,8 +1,9 @@
 #include <iostream>
 #include <cstdint>
-
-#define USE_PEGAFOX_UTILS_IMPLEMENTATION
-#include <pegafox/utils.hpp>
+#include <array>
+#include <format>
+#include <sstream>
+#include <fstream>
 
 std::string filename = "a.out";
 
@@ -20,39 +21,52 @@ int main(int argc, char* argv[])
 
   if (!filename.empty())
   {
-    std::string fileText = pf::getFileText(filename);
+    std::ifstream inputFile(filename);
 
-    uint16_t end = fileText.size();
+    std::stringstream fileText;
+    fileText << inputFile.rdbuf();
 
-    std::copy(fileText.begin(), fileText.end(), program.begin());
+    inputFile.close();
+
+    uint16_t end = fileText.str().size();
+
+    fileText.str().copy((char*)program.data(), -1);
 
     for (uint16_t i = 0; i < end; i += 2)
     {
-      std::cout << pf::intToHexStr(uint16_t(i), "") << '\t';
+      std::cout << std::format("{:X}", uint16_t(i)) << ' ';
 
       std::cout << (program[i] >> 7) << ((program[i] >> 6) & 1) << ((program[i] >> 5) & 1) << ((program[i] >> 4) & 1) << ((program[i] >> 3) & 1);
       switch (opcodeTypes[program[i] >> 3])
       {
         case OperationType::NoOperands:
-          std::cout << ' ' << pf::intToHexStr(uint16_t((uint16_t(program[i] & 0x7) << 8) | program[i+1])).erase(2, 1);
+          std::cout << ' ' << std::format("{:X}", uint16_t((uint16_t(program[i] & 0x7) << 8) | program[i+1])).erase(2, 1);
           break;
         case OperationType::OneOperand:
           std::cout << ' ' << (program[i] & 0x7);
-          std::cout << ' ' << pf::intToHexStr(program[i+1]);
+          std::cout << ' ' << std::format("{:X}", program[i+1]);
           break;
         case OperationType::ValueOperand:
           std::cout << ' ' << (program[i] & 0x7);
-          std::cout << ' ' << pf::intToHexStr(uint8_t(program[i]));
+          std::cout << ' ' << std::format("{:X}", uint8_t(program[i]));
+          break;
+        case OperationType::Reg3:
+          std::cout << ' ' << (program[i] & 0x7);
+          std::cout << ' ' << (program[i+1] >> 5);
+          if (program[i+1] & 1)
+          {
+            std::cout << ' ' << std::format("{:X}", uint8_t(program[i+1] & 0x1E));
+            std::cout << ' ' << (program[i+1] & 1);
+          } else
+          {
+            std::cout << ' ' << ((program[i+1] >> 2) & 0x07);
+            std::cout << ' ' << (program[i+1] & 2) << (program[i+1] & 1);
+          }
           break;
         case OperationType::RegValue:
           std::cout << ' ' << (program[i] & 0x7);
-          std::cout << ' ' << (program[i+1] >> 5);
-          std::cout << ' ' << pf::intToHexStr(uint8_t(program[i+1] & 0x1F));
-          break;
-        case OperationType::RegValueExt:
-          std::cout << ' ' << (program[i] & 0x7);
           std::cout << ' ' << (program[i+1] >> 6);
-          std::cout << ' ' << pf::intToHexStr(uint8_t(program[i+1] & 0x3F));
+          std::cout << ' ' << std::format("{:X}", uint8_t(program[i+1] & 0x3F));
           break;
       }
       std::cout << '\t' << disassembleInstruction(program[i], program[i+1]) << '\n';

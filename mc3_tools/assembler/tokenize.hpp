@@ -1,3 +1,6 @@
+#include <string>
+#include <vector>
+
 std::vector<std::string> tokenize(const std::string& assembly)
 {
   std::vector<std::string> tokens;

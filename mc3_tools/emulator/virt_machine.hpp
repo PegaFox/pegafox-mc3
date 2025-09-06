@@ -17,11 +17,11 @@ class VirtMachine
 
     struct Flags
     {
+      uint8_t bitsSet: 4; // LSB
       bool carry: 1;
       bool overflow: 1;
       bool zero: 1;
-      bool sign: 1;
-      uint8_t bitsSet: 4;
+      bool sign: 1; // MSB
     } flags = {0, 0, 0, 0, 0};
 
     struct InterruptStateBackup
@@ -123,7 +123,7 @@ class VirtMachine
 
       handleInstruction();
     
-      if (pc != 0x0000)
+      if (pc > 0x0001)
       {
         running = true;
       }
@@ -165,7 +165,7 @@ class VirtMachine
               updateFlags(regs[first & 0x07]);
               break;
             case SingleOpcode::GetF:
-              regs[first & 0x07] = (flags.carry << 7) | (flags.overflow << 6) | (flags.zero << 5) | (flags.sign << 4) | flags.bitsSet;
+              regs[first & 0x07] = (flags.sign << 7) | (flags.zero << 6) | (flags.overflow << 5) | (flags.carry << 4) | flags.bitsSet;
               updateFlags(regs[first & 0x07]);
               break;
             case SingleOpcode::PutI:
@@ -200,45 +200,92 @@ class VirtMachine
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::OrReg:
-          regs[first & 0x07] |= regs[second >> 5] + (int8_t(second << 3) >> 3);
+          if (second & 1)
+          {
+            regs[first & 0x07] = regs[second >> 5] | ((second >> 1) & 0xF);
+          } else
+          {
+            regs[first & 0x07] = regs[second >> 5] | regs[(second >> 2) & 0x7];
+          }
+
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::AndReg:
-          regs[first & 0x07] &= regs[second >> 5] + (int8_t(second << 3) >> 3);
+          if (second & 1)
+          {
+            regs[first & 0x07] = regs[second >> 5] & ((second >> 1) & 0xF);
+          } else
+          {
+            regs[first & 0x07] = regs[second >> 5] & regs[(second >> 2) & 0x7];
+          }
+
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::XorReg:
-          regs[first & 0x07] ^= regs[second >> 5] + (int8_t(second << 3) >> 3);
+          if (second & 1)
+          {
+            regs[first & 0x07] = regs[second >> 5] ^ ((second >> 1) & 0xF);
+          } else
+          {
+            regs[first & 0x07] = regs[second >> 5] ^ regs[(second >> 2) & 0x7];
+          }
+
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::LshReg:
-          flags.carry = regs[first & 0x07] >> (16-(regs[second >> 5] + (int8_t(second << 3) >> 3)));
+          if (second & 1)
+          {
+            flags.carry = regs[second >> 5] >> (16-((second >> 1) & 0xF));
+            regs[first & 0x07] = regs[second >> 5] << ((second >> 1) & 0xF);
+          } else
+          {
+            flags.carry = regs[second >> 5] >> (16-regs[(second >> 2)] & 0x7);
+            regs[first & 0x07] = regs[second >> 5] << regs[(second >> 2) & 0x7];
+          }
 
-          regs[first & 0x07] <<= regs[second >> 5] + (int8_t(second << 3) >> 3);
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::RshReg:
-          flags.carry = regs[first & 0x07] << (16-(regs[second >> 5] + (int8_t(second << 3) >> 3)));
+          if (second & 1)
+          {
+            flags.carry = regs[second >> 5] << (16-((second >> 1) & 0xF));
+            regs[first & 0x07] = regs[second >> 5] << ((second >> 1) & 0xF);
+          } else
+          {
+            flags.carry = regs[second >> 5] >> (16-regs[(second >> 2)] & 0x7);
+            regs[first & 0x07] = regs[second >> 5] >> regs[(second >> 2) & 0x7];
+          }
 
-          regs[first & 0x07] >>= regs[second >> 5] + (int8_t(second << 3) >> 3);
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::AddReg:
-          flags.carry = regs[first & 0x07] + (regs[second >> 5] + (int8_t(second << 3) >> 3)) < (regs[second >> 5] + (int8_t(second << 3) >> 3));
-          flags.overflow = (regs[first & 0x07] >> 15) == ((regs[second >> 5] + (int8_t(second << 3) >> 3)) >> 15) && (regs[first & 0x07] + (regs[second >> 5] + (int8_t(second << 3) >> 3))) >> 15 != (regs[first & 0x07] >> 15);
+          if (second & 1)
+          {
+            flags.carry = regs[second >> 5] + ((second >> 1) & 0xF) < ((second >> 1) & 0xF);
+            flags.overflow = (regs[second >> 5] >> 15) == (((second >> 1) & 0xF) >> 15) && (regs[second >> 5] + ((second >> 1) & 0xF)) >> 15 != (regs[second >> 5] >> 15);
+            regs[first & 0x07] = regs[second >> 5] + ((second >> 1) & 0xF);
+          } else
+          {
+            flags.carry = regs[second >> 5] + regs[(second >> 2) & 0x7] < regs[(second >> 2) & 0x7];
+            flags.overflow = (regs[second >> 5] >> 15) == (regs[(second >> 2) & 0x7] >> 15) && (regs[second >> 5] + regs[(second >> 2) & 0x7]) >> 15 != (regs[second >> 5] >> 15);
+            regs[first & 0x07] = regs[second >> 5] + regs[(second >> 2) & 0x7];
+          }
 
-          regs[first & 0x07] += regs[second >> 5] + (int8_t(second << 3) >> 3);
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::SubReg:
-          flags.carry = regs[first & 0x07] - (regs[second >> 5] + (int8_t(second << 3) >> 3)) > (regs[second >> 5] + (int8_t(second << 3) >> 3));
-          flags.overflow = (regs[first & 0x07] >> 15) != ((regs[second >> 5] + (int8_t(second << 3) >> 3)) >> 15) && (regs[first & 0x07] + (regs[second >> 5] + (int8_t(second << 3) >> 3))) >> 15 != (regs[first & 0x07] >> 15);
-          
-          regs[first & 0x07] -= regs[second >> 5] + (int8_t(second << 3) >> 3);
-          updateFlags(regs[first & 0x07]);
-          break;
-        case Opcode::SetReg:
-          regs[first & 0x07] = regs[second >> 5] + (int8_t(second << 3) >> 3);
+          if (second & 1)
+          {
+            flags.carry = regs[second >> 5] - ((second >> 1) & 0xF) > ((second >> 1) & 0xF);
+            flags.overflow = (regs[second >> 5] >> 15) != (((second >> 1) & 0xF) >> 15) && (regs[second >> 5] + ((second >> 1) & 0xF)) >> 15 != (regs[second >> 5] >> 15);
+            regs[first & 0x07] = regs[second >> 5] - ((second >> 1) & 0xF);
+          } else
+          {
+            flags.carry = regs[second >> 5] - regs[(second >> 2) & 0x7] > regs[(second >> 2) & 0x7];
+            flags.overflow = (regs[second >> 5] >> 15) != (regs[(second >> 2) & 0x7] >> 15) && (regs[second >> 5] + regs[(second >> 2) & 0x7]) >> 15 != (regs[second >> 5] >> 15);
+            regs[first & 0x07] = regs[second >> 5] - regs[(second >> 2) & 0x7];
+          }
+
           updateFlags(regs[first & 0x07]);
           break;
         case Opcode::SetVal:

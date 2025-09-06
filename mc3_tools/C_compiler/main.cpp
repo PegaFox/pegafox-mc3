@@ -22,13 +22,15 @@
 
 #include "assemble_ir.hpp"
 
+#include "optimize_asm.hpp"
+
 #include "../assembler/assemble.hpp"
 
 #include "../disassembler/disassemble_instruction.hpp"
 
 int main(int argc, char* argv[])
 {
-  outputFilename = "a.out";
+  Compiler compiler;
 
   /*#ifndef NDEBUG
   {
@@ -43,69 +45,77 @@ int main(int argc, char* argv[])
     argv = args;
   }
   #endif // NDEBUG*/
-
-  if (handleArgs(argc, argv))
-  {
-    return -1;
-  }
-
-  std::string fileText = loadFile(inputFilename);
-
-  if (doPreprocess)
-  {
-    fileText = preprocess(fileText);
-    std::cout << "Preprocessed:\n" << fileText << '\n';
-  }
-
-  if (doCompile)
-  {
-    std::list<Token> code = lex(fileText);
-    std::cout << "Tokens:\n";
-
-    for (const Token& token: code)
-    {
-      std::cout << Token::typeStrings[token.type] << ": \"" << token.data << "\"\n";
-    }
   
-    Program AST = parse(code);
+  compiler.typeSizes.pointerSize = 2;
 
-    /*if (optimize)
+  compiler.inputFilenames = {
+    "../C_compiler/libc/lib/memset.c",
+    "../C_compiler/libc/lib/memcpy.c",
+    "../C_compiler/libc/lib/srand.c",
+    "../C_compiler/libc/lib/rand.c"
+  };
+
+  compiler.includeDirs.emplace_back("../C_compiler/libc/include/");
+
+  IRprogram irCode = compiler.compileFromArgs(argc, argv);
+
+  //std::cout << "Intermediate Representation:\n" << compiler.printIR(irCode) << '\n';
+
+  std::vector<std::string> assembly = assembleIR(irCode);
+
+  std::cout << "Assembly: \n";
+  uint16_t irFunctionIndex = 0;
+  uint16_t irOperationIndex = 0;
+  for (std::vector<std::string>::const_iterator token = assembly.begin(); token != assembly.end(); token++)
+  {
+    if (!token->empty())
     {
-      optimizeAST(AST);
-    }*/
+      if (
+        *token == "var" ||
+        *token == "or" || *token == "and" || *token == "xor" || *token == "lsh" ||
+        *token == "rsh" || *token == "add" || *token == "sub" || *token == "or" ||
+        *token == "and" || *token == "xor" || *token == "lsh" || *token == "rsh" ||
+        *token == "add" || *token == "sub" || *token == "set" || *token == "set" ||
+        *token == "set" || *token == "put" || *token == "put" || *token == "jz" ||
+        *token == "jnz" || *token == "jc" || *token == "jnc" || *token == "js" ||
+        *token == "jns" || *token == "jo" || *token == "jno" || token->back() == ':')
+      {
+        std::cout << "\n";
+      } else if (*token == "@" || *token == "+" || *token == "-")
+      {
+        std::cout << "\b";
+      }
 
-    removeSubExpressions(AST);
-  
-    std::cout << "AST:\n";
-    PrintAST printer(AST);
+      std::cout << *token;
 
-    std::vector<Operation> asmCode = generateIR(AST);
-
-    if (optimize)
+      if (*token != "@" && *token != "+" && *token != "-")
+      {
+        std::cout << " ";
+      }
+    } else
     {
-      optimizeIR(asmCode);
+      assembly.erase(token--);
+      std::cout << "\n\n" << compiler.printIRoperation(irCode.program[irFunctionIndex].body[irOperationIndex]);
+
+      irOperationIndex++;
+      if (irOperationIndex >= irCode.program[irFunctionIndex].body.size())
+      {
+        irOperationIndex = 0;
+        irFunctionIndex++;
+      }
     }
-
-    fileText = printIR(asmCode);
-    std::cout << "Intermediate Representation:\n" << fileText << '\n';
-
-    std::vector<std::string> assembly = assembleIR(asmCode);
-
-    std::vector<uint8_t> binary = assemble(assembly);
-
-    std::cout << "Assembly: \n";
-    for (uint16_t i = 0; i < binary.size()-1; i += 2)
-    {
-      std::cout << disassembleInstruction(binary[i], binary[i+1]) << "\n";
-    }
-
-    std::filebuf file;
-    file.open(outputFilename, std::ios::out | std::ios::binary);
-
-    file.sputn((char*)binary.data(), binary.size());
-
-    file.close();
   }
+
+  //std::cout << "Intermediate Representation:\n" << compiler.printIR(irCode) << '\n';
+
+  std::vector<uint8_t> binary = assemble(assembly);
+
+  std::filebuf file;
+  file.open(compiler.outputFilename, std::ios::out | std::ios::binary);
+
+  file.sputn((char*)binary.data(), binary.size());
+
+  file.close();
 
   return 0;
 }

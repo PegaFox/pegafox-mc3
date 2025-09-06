@@ -4,9 +4,6 @@
 #include <iostream>
 #include <string>
 
-#define USE_PEGAFOX_UTILS_IMPLEMENTATION
-#include <pegafox/utils.hpp>
-
 #include "emu-utils/bus.hpp"
 #include "emu-utils/ram.hpp"
 #include "emu-utils/rom.hpp"
@@ -35,6 +32,8 @@ std::string filename;
 
 #include "handle_args.hpp"
 
+#include "clock.hpp"
+
 #include "debug_window.hpp"
 
 DebugWindow debugWindow;
@@ -56,7 +55,7 @@ int main(int argc, char *argv[])
 {
   handleArgs(argc, argv);
 
-  pf::FPS vSyncClock;
+  Clock vSyncClock;
 
   vm.bus.connect(&ram, 0x0000, 0xFEFF);
   vm.bus.connect(&hdd, 0xFF00, 0xFF06);
@@ -72,9 +71,14 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  std::string program = pf::getFileText(filename);
+  std::ifstream inputFile(filename);
 
-  std::copy(program.begin(), program.end(), ram.memory);
+  std::stringstream program;
+  program << inputFile.rdbuf();
+
+  inputFile.close();
+
+  program.str().copy((char*)ram.memory, -1);
 
   bool running = true;
   while (running)
