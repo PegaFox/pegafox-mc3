@@ -8,7 +8,7 @@ int main()
 {
   *(volatile uint16_t*)((&VGA)+1) = width; // width
   *(volatile uint16_t*)((&VGA)+3) = height; // height
-  *((&VGA)+5) = 1; // byte depth
+  *((&VGA)+5) = 2; // byte depth
   VGA = 1; // update signal
   
   KEYBOARD_INSTRUCTION_OPCODE = 0xF4;
@@ -19,7 +19,7 @@ int main()
   for (uint16_t p = 0; p < width*height; p++)
   {
     *(volatile uint16_t*)((&VGA)+1) = p; // pixel index
-    *((&VGA)+4) = p; // pixel color
+    *(volatile uint16_t*)((&VGA)+4) = p; // pixel color
   }
 
   TTY = 'D';

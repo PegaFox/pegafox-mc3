@@ -28,9 +28,24 @@
 
 #include "../disassembler/disassemble_instruction.hpp"
 
+bool useStdlib = true;
+bool staticLinkStdlib = false;
+
 int main(int argc, char* argv[])
 {
   Compiler compiler;
+
+  for (int a = 0; a < argc; a++)
+  {
+    std::string arg = argv[a];
+    if (arg == "-nostdlib" || arg == "--nostdlib")
+    {
+      useStdlib = false;
+    } else if (arg == "-static" || arg == "--static" || arg == "-static-libc" || arg == "--static-libc")
+    {
+      staticLinkStdlib = true;
+    }
+  }
 
   /*#ifndef NDEBUG
   {
@@ -48,12 +63,15 @@ int main(int argc, char* argv[])
   
   compiler.typeSizes.pointerSize = 2;
 
-  compiler.inputFilenames = {
-    "../C_compiler/libc/lib/memset.c",
-    "../C_compiler/libc/lib/memcpy.c",
-    "../C_compiler/libc/lib/srand.c",
-    "../C_compiler/libc/lib/rand.c"
-  };
+  if (useStdlib && staticLinkStdlib)
+  {
+    compiler.inputFilenames = {
+      "../C_compiler/libc/lib/memset.c",
+      "../C_compiler/libc/lib/memcpy.c",
+      "../C_compiler/libc/lib/srand.c",
+      "../C_compiler/libc/lib/rand.c"
+    };
+  }
 
   compiler.includeDirs.emplace_back("../C_compiler/libc/include/");
 
