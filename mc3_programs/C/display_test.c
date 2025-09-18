@@ -16,10 +16,12 @@ int main()
   KEYBOARD_INSTRUCTION_OPCODE = 0xF5;
 
   VGA = 0; // switch to pixel input
-  for (uint16_t p = 0; p < width*height; p++)
+  for (uint16_t p = 0; p < (width*height) << 1; p += 2)
   {
     *(volatile uint16_t*)((&VGA)+1) = p; // pixel index
-    *(volatile uint16_t*)((&VGA)+4) = p; // pixel color
+    *((&VGA)+4) = p; // pixel color
+    *(volatile uint16_t*)((&VGA)+1) = p+1; // pixel index
+    *((&VGA)+4) = p; // pixel color
   }
 
   TTY = 'D';

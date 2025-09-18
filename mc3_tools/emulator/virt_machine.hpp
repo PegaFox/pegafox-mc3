@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <array>
+#include <iostream>
 
 #include "emu-utils/bus.hpp"
 #include "../mc3_utils.hpp"
@@ -308,6 +309,10 @@ class VirtMachine
         case Opcode::StrW: {
           uint16_t address = regs[second >> 6] + (int8_t(second << 2) >> 2);
 
+          if (address >= 0xFF00)
+          {
+            std::cout << "Write two bytes to " << address << "\n";
+          }
           bus.write(address, regs[first & 0x07] & 0xFF);
           bus.write(address + 1, regs[first & 0x07] >> 8);
           break;
