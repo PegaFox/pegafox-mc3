@@ -3,10 +3,6 @@
 
   #include <stdint.h>
 
-// uses seven bytes
-// read/write bytes 1-4: access the selected block.
-// read/write byte 5: access the selected word.
-// read/write bytes 6-7: access the word at the specified offset in the selected block.
   #define HDD (*(volatile uint8_t*)(0xFF00))
   #define HDD_SELECTED_BLOCK (*(volatile uint32_t*)(0xFF00))
   #define HDD_SELECTED_WORD (*(volatile uint8_t*)(0xFF04))
