@@ -35,29 +35,33 @@ Instructions are aligned at two byte boundaries.
 00000 OR reg(3) WITH value(8)
 00001 AND reg(3) WITH value(8)
 00010 XOR reg(3) WITH value(8)
-00011 LSHIFT reg(3) BY value(8)
-00100 RSHIFT reg(3) BY value(8)
-00101 ADD value(8) TO reg(3)
-00110 SUB value(8) FROM reg(3)
-00111 SINGLE_OPERAND
+//00011 LSHIFT reg(3) BY value(8)
+//00100 RSHIFT reg(3) BY value(8)
+00011 ADD value(8) TO reg(3)
+00100 SUB value(8) FROM reg(3)
+00101 SINGLE_OPERAND
   0x00 NOT reg(3)
   0x01 READ flags TO reg(3)
   0x02 SET interruptVector TO reg(3)
 
-01000 SET reg(3) TO reg(3) | reg(3) 00
-01000 SET reg(3) TO reg(3) | value(4) 1
-01001 SET reg(3) TO reg(3) & reg(3) 00
-01001 SET reg(3) TO reg(3) & value(4) 1
-01010 SET reg(3) TO reg(3) ^ reg(3) 00
-01010 SET reg(3) TO reg(3) ^ value(4) 1
-01011 SET reg(3) TO reg(3) << reg(3) 00
-01011 SET reg(3) TO reg(3) << value(4) 1
-01100 SET reg(3) TO reg(3) >> reg(3) 00
-01100 SET reg(3) TO reg(3) >> value(4) 1
-01101 SET reg(3) TO reg(3) + reg(3) 00
-01101 SET reg(3) TO reg(3) + value(4) 1
-01110 SET reg(3) TO reg(3) - reg(3) 00
-01110 SET reg(3) TO reg(3) - value(4) 1
+00110 SET reg(3) TO reg(3) ORED WITH reg(3) 00
+00110 SET reg(3) TO reg(3) ORED WITH value(4) 1
+00111 SET reg(3) TO reg(3) ANDED WITH reg(3) 00
+00111 SET reg(3) TO reg(3) ANDED WITH value(4) 1
+01000 SET reg(3) TO reg(3) XORED WITH reg(3) 00
+01000 SET reg(3) TO reg(3) XORED WITH value(4) 1
+01001 SET reg(3) TO reg(3) LSHIFTED BY reg(3) 00
+01001 SET reg(3) TO reg(3) LSHIFTED BY value(4) 1
+01010 SET reg(3) TO reg(3) RSHIFTED BY reg(3) 00
+01010 SET reg(3) TO reg(3) RSHIFTED BY value(4) 1
+01011 SET reg(3) TO reg(3) LROTATED BY reg(3) 00
+01011 SET reg(3) TO reg(3) LROTATED BY value(4) 1
+01100 SET reg(3) TO reg(3) RROTATED BY reg(3) 00
+01100 SET reg(3) TO reg(3) RROTATED BY value(4) 1
+01101 SET reg(3) TO reg(3) ADDED TO reg(3) 00
+01101 SET reg(3) TO reg(3) ADDED TO value(4) 1
+01110 SET reg(3) TO reg(3) SUBTRACTED WITH reg(3) 00
+01110 SET reg(3) TO reg(3) SUBTRACTED WITH value(4) 1
 
 01111 SET reg(3) TO value(8)
 

@@ -7,3 +7,6 @@
 [submodule "mc3_tools/C_compiler/c-compiler-lib"]
 	path = mc3_tools/C_compiler/c-compiler-lib
 	url = https://github.com/PegaFox/c-compiler-lib
+[submodule "mc3_tools/assembler/expression-parser"]
+	path = mc3_tools/assembler/expression-parser
+	url = https://github.com/PegaFox/expression-parser

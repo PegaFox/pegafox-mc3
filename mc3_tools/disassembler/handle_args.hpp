@@ -1,3 +1,8 @@
+#include <cstdint>
+#include <iostream>
+
+extern std::string filename;
+
 void showHelp()
 {
   std::cout << R"(

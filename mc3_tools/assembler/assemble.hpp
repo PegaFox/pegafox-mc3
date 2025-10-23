@@ -9,7 +9,32 @@
 
 #include "../mc3_utils.hpp"
 
-#include "expression.hpp"
+#include "expression-parser/expression.hpp"
+
+// using namespace rather than scoped enum allows for implicit integral conversions
+namespace OperatorType
+{
+  enum OperatorType: uint16_t
+  {
+    Constant,
+    Identifier,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Max,
+    None = uint16_t(-1),
+  };
+}
+
+const Operator::StaticData operatorTypes[OperatorType::Max] = {
+  [OperatorType::Constant] = {.pattern = std::regex("[0-9]+(\\.[0-9]+)?"), .hasChildren = false},
+  [OperatorType::Identifier] = {.pattern = std::regex("[a-zA-Z_]\\w*\\b"), .hasChildren = false},
+  [OperatorType::Add] = {.pattern = std::regex("\\+"), .hasChildren = true, .priority = 1, .leftPriority = false},
+  [OperatorType::Subtract] = {.pattern = std::regex("\\-"), .hasChildren = true, .priority = 1, .leftPriority = false},
+  [OperatorType::Multiply] = {.pattern = std::regex("\\*"), .hasChildren = true, .priority = 2, .leftPriority = false},
+  [OperatorType::Divide] = {.pattern = std::regex("/"), .hasChildren = true, .priority = 2, .leftPriority = false}
+};
 
 typedef std::pair<std::array<uint8_t, 2>, std::vector<Operator>> asmOperation;
 typedef std::array<asmOperation, INT16_MAX+1> asmProgram;
@@ -49,7 +74,7 @@ uint8_t getReg(const std::string& reg)
 
 uint16_t parseConstantExpression(const std::map<std::string, std::array<uint16_t, 2>>& variables, const std::vector<Operator>& expression, bool* trivial = nullptr, uint8_t currentIndex = 0)
 {
-  if (expression[currentIndex].type == Operator::Identifier)
+  if (expression[currentIndex].type == OperatorType::Identifier)
   {
     if (trivial)
     {
@@ -63,7 +88,7 @@ uint16_t parseConstantExpression(const std::map<std::string, std::array<uint16_t
     {
       return 0;
     }
-  } else if (expression[currentIndex].type == Operator::Constant)
+  } else if (expression[currentIndex].type == OperatorType::Constant)
   {
     return std::stoi(std::string(expression[currentIndex].token));
   }
@@ -75,7 +100,7 @@ uint16_t parseConstantExpression(const std::map<std::string, std::array<uint16_t
   uint16_t leftValue = 0;
   uint16_t rightValue = 0;
 
-  if (Operator::operatorData[leftChild.type].hasChildren)
+  if (operatorTypes[leftChild.type].hasChildren)
   {
     bool leftTrivial = true;
     leftValue = parseConstantExpression(variables, expression, &leftTrivial);
@@ -84,7 +109,7 @@ uint16_t parseConstantExpression(const std::map<std::string, std::array<uint16_t
     {
       *trivial &= leftTrivial;
     }
-  } else if (leftChild.type == Operator::Identifier)
+  } else if (leftChild.type == OperatorType::Identifier)
   {
     if (trivial)
     {
@@ -100,7 +125,7 @@ uint16_t parseConstantExpression(const std::map<std::string, std::array<uint16_t
     leftValue = std::stoi(std::string(leftChild.token));
   }
 
-  if (Operator::operatorData[rightChild.type].hasChildren)
+  if (operatorTypes[rightChild.type].hasChildren)
   {
     bool rightTrivial = true;
     rightValue = parseConstantExpression(variables, expression, &rightTrivial);
@@ -109,7 +134,7 @@ uint16_t parseConstantExpression(const std::map<std::string, std::array<uint16_t
     {
       *trivial &= rightTrivial;
     }
-  } else if (rightChild.type == Operator::Identifier)
+  } else if (rightChild.type == OperatorType::Identifier)
   {
     if (trivial)
     {
@@ -127,13 +152,13 @@ uint16_t parseConstantExpression(const std::map<std::string, std::array<uint16_t
 
   switch (parent.type)
   {
-    case Operator::Add:
+    case OperatorType::Add:
       return leftValue + rightValue;
-    case Operator::Subtract:
+    case OperatorType::Subtract:
       return leftValue - rightValue;
-    case Operator::Multiply:
+    case OperatorType::Multiply:
       return leftValue * rightValue;
-    case Operator::Divide:
+    case OperatorType::Divide:
       return leftValue / rightValue;
     default:
       if (trivial)
@@ -156,10 +181,10 @@ uint16_t parseInt(std::map<std::string, std::array<uint16_t, 2>>& variables, con
       break;
     }
 
-    Operator::Type tokenType = Operator::parseType(tokens[expressionEnd]);
+    OperatorType::OperatorType tokenType = OperatorType::OperatorType(Operator::parseType(operatorTypes, OperatorType::Max, tokens[expressionEnd]));
 
     // Break if two identifiers/constants are adjacent
-    if (tokenType == Operator::None || Operator::operatorData[tokenType].hasChildren == lastHadChildren)
+    if (tokenType == OperatorType::None || operatorTypes[tokenType].hasChildren == lastHadChildren)
     {
       break;
     } else
@@ -168,8 +193,10 @@ uint16_t parseInt(std::map<std::string, std::array<uint16_t, 2>>& variables, con
     }
   }
 
-  std::vector<Operator> expressionTree = Operator::parseExpression(tokens.begin()+t, tokens.begin()+expressionEnd);
+  std::vector<Operator> expressionTree = Operator::parseExpression(operatorTypes, OperatorType::None, tokens.begin()+t, tokens.begin()+expressionEnd);
   t = expressionEnd-1;
+
+  //std::cout << "\n" << expressionTree[0].type << "\n";
 
   bool trivial = true;
   uint16_t value = parseConstantExpression(variables, expressionTree, &trivial);
@@ -255,8 +282,13 @@ asmOperation getALUbinaryOperation(const std::vector<std::string>& tokens, std::
 
   uint8_t mainReg = getReg(tokens[t++]);
 
-  if (isReg(tokens[t]))
+  if (valCode == Opcode::None || isReg(tokens[t]))
   {
+    if (!isReg(tokens[t]))
+    {
+      t--;
+    }
+
     operation.first[0] = (uint8_t(regCode) << 3) | mainReg;
 
     operation.first[1] = getReg3(tokens, t, mainReg, variables, &operation.second);
@@ -299,17 +331,14 @@ asmOperation getJumpOperation(const std::vector<std::string>& tokens, std::size_
   return operation;
 }
 
-std::array<asmOperation, 3> getImm8Operation(Opcode opcode, uint8_t mainReg, uint16_t value, uint8_t minCommandCount = 0)
+std::vector<asmOperation> getImm8Operation(Opcode opcode, uint8_t mainReg, uint16_t value, uint8_t minCommandCount = 0)
 {
-  std::array<asmOperation, 3> operations;
-  uint8_t commandCount;
+  std::vector<asmOperation> operations;
+  operations.reserve(minCommandCount);
 
   if ((value & 0xFF) == value)
   {
-    commandCount = 1;
-
-    operations[0].first[0] = (uint8_t(opcode) << 3) | mainReg;
-    operations[0].first[1] = value;
+    operations.emplace_back(std::array<uint8_t, 2>{uint8_t((uint8_t(opcode) << 3) | mainReg), (uint8_t)value}, std::vector<Operator>{});
   } else
   {
     switch (opcode)
@@ -317,37 +346,38 @@ std::array<asmOperation, 3> getImm8Operation(Opcode opcode, uint8_t mainReg, uin
       case Opcode::OrVal:
       case Opcode::AndVal:
       case Opcode::XorVal:
-      case Opcode::LshVal:
-      case Opcode::RshVal:
-        std::cerr << "ERROR: attempt to resolve unimplemented multiop instruction (opcode = " << int(opcode) << ")\n";
+        if ((value & 0xFF00) == value)
+        {
+          operations.insert(operations.end(), {
+            {{uint8_t((uint8_t(Opcode::LrotReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
+            {{uint8_t((uint8_t(opcode) << 3) | mainReg), uint8_t(value >> 8)}, {}},
+            {{uint8_t((uint8_t(Opcode::LrotReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
+          });
+        } else
+        {
+          operations.insert(operations.end(), {
+            {{uint8_t((uint8_t(Opcode::LrotReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
+            {{uint8_t((uint8_t(opcode) << 3) | mainReg), uint8_t(value >> 8)}, {}},
+            {{uint8_t((uint8_t(Opcode::LrotReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
+            {{uint8_t((uint8_t(opcode) << 3) | mainReg), uint8_t(value & 0xFF)}, {}},
+          });
+        }
+        break;
+      /*case Opcode::LshVal:
+      case Opcode::RshVal:*/
+        std::cerr << "ERROR: attempt to resolve unimplemented multiop instruction (opcode = " << int(opcode) << ", value = " << value << ")\n";
         break;
       case Opcode::AddVal:
-        if (value <= 0x2FD)
+        while (value > 0xFF)
         {
-          commandCount = 1;
+          operations.emplace_back(std::array<uint8_t, 2>{uint8_t((uint8_t(Opcode::AddVal) << 3) | mainReg), 0xFF}, std::vector<Operator>{});
 
-          operations[0].first[0] = (uint8_t(Opcode::AddVal) << 3) | mainReg;
-          operations[0].first[1] = value & 0xFF;
+          value -= 0xFF;
+        }
 
-          if (value > 0xFF)
-          {
-            commandCount = 2;
-
-            value -= 0xFF;
-
-            operations[1].first[0] = (uint8_t(Opcode::AddVal) << 3) | mainReg;
-            operations[1].first[1] = value & 0xFF;
-
-            if (value > 0xFF)
-            {
-              commandCount = 3;
-
-              value -= 0xFF;
-
-              operations[2].first[0] = (uint8_t(Opcode::AddVal) << 3) | mainReg;
-              operations[2].first[1] = value & 0xFF;
-            }
-          }
+        if (value > 0)
+        {
+          operations.emplace_back(std::array<uint8_t, 2>{uint8_t((uint8_t(Opcode::AddVal) << 3) | mainReg), uint8_t(value)}, std::vector<Operator>{});
         }
         break;
       case Opcode::SubVal:
@@ -359,51 +389,37 @@ std::array<asmOperation, 3> getImm8Operation(Opcode opcode, uint8_t mainReg, uin
       case Opcode::JmpNs:
       case Opcode::JmpO:
       case Opcode::JmpNo:
-        std::cerr << "ERROR: attempt to resolve unimplemented multiop instruction (opcode = " << int(opcode) << ")\n";
+        std::cerr << "ERROR: attempt to resolve unimplemented multiop instruction (opcode = " << int(opcode) << ", value = " << value << ")\n";
         break;
       case Opcode::SetVal:
         if ((value & 0xFF00) == value)
         {
-          commandCount = 2;
-
-          operations[0].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
-          operations[0].first[1] = value >> 8;
-
-          operations[1].first[0] = (uint8_t(Opcode::LshVal) << 3) | mainReg;
-          operations[1].first[1] = 8;
+          operations.insert(operations.end(), {
+            {{uint8_t((uint8_t(Opcode::SetVal) << 3) | mainReg), uint8_t(value >> 8)}, {}},
+            {{uint8_t((uint8_t(Opcode::LshReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
+          });
         } else if (value > 0xFF00)
         {
-          commandCount = 2;
-
-          operations[0].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
-          operations[0].first[1] = 0;
-
-          operations[1].first[0] = (uint8_t(Opcode::SubVal) << 3) | mainReg;
-          operations[1].first[1] = -(value & 0xFF);
+          operations.insert(operations.end(), {
+            {{uint8_t((uint8_t(Opcode::SetVal) << 3) | mainReg), 0}, {}},
+            {{uint8_t((uint8_t(Opcode::SubVal) << 3) | mainReg), uint8_t(-(value & 0xFF))}, {}},
+          });
         } else
         {
-          commandCount = 3;
-
-          operations[0].first[0] = (uint8_t(Opcode::SetVal) << 3) | mainReg;
-          operations[0].first[1] = value >> 8;
-
-          operations[1].first[0] = (uint8_t(Opcode::LshVal) << 3) | mainReg;
-          operations[1].first[1] = 8;
-
-          operations[2].first[0] = (uint8_t(Opcode::AddVal) << 3) | mainReg;
-          operations[2].first[1] = value & 0xFF;
+          operations.insert(operations.end(), {
+            {{uint8_t((uint8_t(Opcode::SetVal) << 3) | mainReg), uint8_t(value >> 8)}, {}},
+            {{uint8_t((uint8_t(Opcode::LshReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
+            {{uint8_t((uint8_t(Opcode::AddVal) << 3) | mainReg), uint8_t(value & 0xFF)}, {}},
+          });
         }
         break;
     }
   }
 
   // If space is needed, pad with no-ops
-  while (commandCount < minCommandCount)
+  while (operations.size() < minCommandCount)
   {
-    operations[commandCount].first[0] = 1;
-    operations[commandCount].first[1] = 0;
-
-    commandCount++;
+    operations.emplace_back(std::array<uint8_t, 2>{1, 0}, std::vector<Operator>{});
   }
 
   return operations;
@@ -432,22 +448,23 @@ asmProgram resolveLabels(asmProgram program, std::map<std::string, std::array<ui
         }*/
 
         uint8_t operationChainLength = 1;
-        if (program[o+1].second == expression)
+        for (; program[o+operationChainLength].second == expression; operationChainLength++) {}
+        /*if (program[o+1].second == expression)
         {
           operationChainLength++;
           if (program[o+2].second == expression)
           {
             operationChainLength++;
           }
-        }
+        }*/
 
         switch (Opcode(program[o].first[0] >> 3))
         {
           case Opcode::OrVal:
           case Opcode::AndVal:
           case Opcode::XorVal:
-          case Opcode::LshVal:
-          case Opcode::RshVal:
+          //case Opcode::LshVal:
+          //case Opcode::RshVal:
           case Opcode::AddVal:
           case Opcode::SubVal:
           case Opcode::SetVal:
@@ -459,75 +476,65 @@ asmProgram resolveLabels(asmProgram program, std::map<std::string, std::array<ui
           case Opcode::JmpNs:
           case Opcode::JmpO:
           case Opcode::JmpNo: {
-            std::array<asmOperation, 3> operations = getImm8Operation(Opcode(program[o].first[0] >> 3), program[o].first[0] & 0x7, value, 0 + iterations/200);
+            std::vector<asmOperation> operations = getImm8Operation(Opcode(program[o].first[0] >> 3), program[o].first[0] & 0x7, value, 0 + iterations/200);
 
-            uint8_t operationSize = 1;
-            if (operations[1].first[0] != 0x00)
+            /*if (operations[1].first[0] != 0x00)
             {
               operationSize++;
               if (operations[2].first[0] != 0x00)
               {
                 operationSize++;
               }
-            }
+            }*/
 
-            if (operationSize != operationChainLength)
+            /*std::cout << "chain len: " << (int)operationChainLength << "\n";
+            std::cout << "iterations: " << (int)iterations << "\n";
+            std::cout << "operation index: " << (int)o << "\n";
+            std::cout << "expression len: " << (int)program[o].second.size() << "\n";*/
+            if (operations.size() != operationChainLength)
             {
               changed = true;
-              if (operationSize > operationChainLength)
+              if (operations.size() > operationChainLength)
               {
-                std::move_backward(program.data()+o, program.end()-3, program.end()-(3-(operationSize-operationChainLength)));
-                currentBinarySize += (operationSize-operationChainLength)*2;
-              } else if (operationSize < operationChainLength)
+                //std::move_backward(program.data()+o, program.end()-3, program.end()-(3-(operations.size()-operationChainLength)));
+                std::move_backward(program.data()+o, program.end()-(operations.size()-operationChainLength), program.end());
+                currentBinarySize += (operations.size()-operationChainLength)*2;
+              } else if (operations.size() < operationChainLength)
               {
-                std::move(program.data()+o+operationChainLength, program.end(), program.data()+o+operationSize);
-                currentBinarySize -= (operationChainLength-operationSize)*2;
+                std::move(program.data()+o+operationChainLength, program.end(), program.data()+o+operations.size());
+                currentBinarySize -= (operationChainLength-operations.size())*2;
               }
 
+              // Update new variable positions
               for (std::pair<const std::string, std::array<uint16_t, 2>>& variable: variables)
               {
                 if (variable.second[0] > o << 1)
                 {
-                  variable.second[0] += (operationSize-operationChainLength) << 1;
+                  variable.second[0] += (operations.size()-operationChainLength) << 1;
                 }
               }
             }
 
-            if (program[o].first != operations[0].first)
+            for (uint8_t i = 0; i < operations.size(); i++)
             {
-              changed = true;
-            }
-
-            program[o].first = operations[0].first;
-            program[o].second = expression;
-            if (operationSize > 1)
-            {
-              if (program[o+1].first != operations[1].first)
+              if (program[o+i].first != operations[i].first)
               {
                 changed = true;
               }
-                
-              program[o+1].first = operations[1].first;
-              program[o+1].second = expression;
-              if (operationSize > 2)
-              {
-                if (program[o+2].first != operations[2].first)
-                {
-                  changed = true;
-                }
-
-                program[o+2].first = operations[2].first;
-                program[o+2].second = expression;
-              }
+                  
+              program[o+i].first = operations[i].first;
+              program[o+i].second = expression;
             }
 
-            o += operationSize-1;
+            o += operations.size()-1;
             break;
           } case Opcode::OrReg:
           case Opcode::AndReg:
           case Opcode::XorReg:
           case Opcode::LshReg:
           case Opcode::RshReg:
+          case Opcode::LrotReg:
+          case Opcode::RrotReg:
           case Opcode::AddReg:
           case Opcode::SubReg:
             std::cerr << "ERROR: attempt to resolve non-trivial expression for unimplemented imm4 instruction (opcode = " << int(program[o].first[0] >> 3) << ")\n";
@@ -583,11 +590,11 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
       pos += 2;
     } else if (tokens[t] == "lsh")
     {
-      program[pos >> 1] = getALUbinaryOperation(tokens, ++t, variables, Opcode::LshReg, Opcode::LshVal);
+      program[pos >> 1] = getALUbinaryOperation(tokens, ++t, variables, Opcode::LshReg, Opcode::None);
       pos += 2;
     } else if (tokens[t] == "rsh")
     {
-      program[pos >> 1] = getALUbinaryOperation(tokens, ++t, variables, Opcode::RshReg, Opcode::RshVal);
+      program[pos >> 1] = getALUbinaryOperation(tokens, ++t, variables, Opcode::RshReg, Opcode::None);
       pos += 2;
     } else if (tokens[t] == "add")
     {
@@ -617,24 +624,14 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
       {
         uint16_t value = parseInt(variables, tokens, t, &program[pos >> 1].second);
 
-        std::array<asmOperation, 3> operations = getImm8Operation(Opcode::SetVal, mainReg, value);
+        std::vector<asmOperation> operations = getImm8Operation(Opcode::SetVal, mainReg, value);
         
-        if (operations[0].first[0] != 0x00)
+        for (uint8_t i = 0; i < operations.size(); i++)
         {
-          program[pos >> 1].first = operations[0].first;
-
-          if (operations[1].first[0] != 0x00)
-          {
-            pos += 2;
-            program[pos >> 1].first = operations[1].first;
-
-            if (operations[2].first[0] != 0x00)
-            {
-              pos += 2;
-              program[pos >> 1].first = operations[2].first;
-            }
-          }
+          program[pos >> 1].first = operations[i].first;
+          pos += 2;
         }
+        pos -= 2;
       } else
       {
         uint16_t locationSize = 0;

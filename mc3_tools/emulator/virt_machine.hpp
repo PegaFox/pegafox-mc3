@@ -174,7 +174,7 @@ class VirtMachine
               break;
           }
           break;
-        case Opcode::LshVal:
+        /*case Opcode::LshVal:
           flags.carry = regs[first & 0x07] >> (16-second);
 
           regs[first & 0x07] <<= second;
@@ -185,7 +185,7 @@ class VirtMachine
 
           regs[first & 0x07] >>= second;
           updateFlags(regs[first & 0x07]);
-          break;
+          break;*/
         case Opcode::AddVal:
           flags.carry = uint16_t(regs[first & 0x07] + second) < second;
           flags.overflow = (regs[first & 0x07] >> 15) == (second >> 15) && (regs[first & 0x07] + second) >> 15 != (regs[first & 0x07] >> 15);
@@ -250,11 +250,37 @@ class VirtMachine
           if (second & 1)
           {
             flags.carry = regs[second >> 5] << (16-((second >> 1) & 0xF));
-            regs[first & 0x07] = regs[second >> 5] << ((second >> 1) & 0xF);
+            regs[first & 0x07] = regs[second >> 5] >> ((second >> 1) & 0xF);
+          } else
+          {
+            flags.carry = regs[second >> 5] << (16-regs[(second >> 2)] & 0x7);
+            regs[first & 0x07] = regs[second >> 5] >> regs[(second >> 2) & 0x7];
+          }
+
+          updateFlags(regs[first & 0x07]);
+          break;
+        case Opcode::LrotReg:
+          if (second & 1)
+          {
+            flags.carry = regs[second >> 5] >> (16-((second >> 1) & 0xF));
+            regs[first & 0x07] = regs[second >> 5] << ((second >> 1) & 0xF) | regs[second >> 5] >> (16-((second >> 1) & 0xF));
           } else
           {
             flags.carry = regs[second >> 5] >> (16-regs[(second >> 2)] & 0x7);
-            regs[first & 0x07] = regs[second >> 5] >> regs[(second >> 2) & 0x7];
+            regs[first & 0x07] = regs[second >> 5] << regs[(second >> 2) & 0x7] | regs[second >> 5] >> (16-regs[(second >> 2) & 0x7]);
+          }
+
+          updateFlags(regs[first & 0x07]);
+          break;
+        case Opcode::RrotReg:
+          if (second & 1)
+          {
+            flags.carry = regs[second >> 5] << (16-((second >> 1) & 0xF));
+            regs[first & 0x07] = regs[second >> 5] >> ((second >> 1) & 0xF) | regs[second >> 5] << (16-((second >> 1) & 0xF));
+          } else
+          {
+            flags.carry = regs[second >> 5] << (16-regs[(second >> 2)] & 0x7);
+            regs[first & 0x07] = regs[second >> 5] >> regs[(second >> 2) & 0x7] | regs[second >> 5] << (16-regs[(second >> 2) & 0x7]);
           }
 
           updateFlags(regs[first & 0x07]);

@@ -1,37 +1,42 @@
+#include <cstdint>
 #include <string>
+
+#include "../mc3_utils.hpp"
 
 std::string disassembleInstruction(uint8_t firstByte, uint8_t secondByte)
 {
   const std::string asmInstructions[32] = {
-    "or ", //OrVal
-    "and ", //AndVal
-    "xor ", //XorVal
-    "lsh ", //LshVal
-    "rsh ", //RshVal
-    "add ", //AddVal
-    "sub ", //SubVal
-    "", //SingleOp
-    "or ", //OrReg
-    "and ", //AndReg
-    "xor ", //XorReg
-    "lsh ", //LshReg
-    "rsh ", //RshReg
-    "add ", //AddReg
-    "sub ", //SubReg
-    "set ", //SetVal
-    "set ", //LodB
-    "set ", //LodW
-    "put ", //StrB
-    "put ", //StrW
-    "jz ", //JmpZ
-    "jnz ", //JmpNz
-    "jc ", //JmpC
-    "jnc ", //JmpNc
-    "js ", //JmpS
-    "jns ", //JmpNs
-    "jo ", //JmpO
-    "jno ", //JmpNo
-    "" //OpOnly
+    [(int)Opcode::OrVal] = "or ",
+    [(int)Opcode::AndVal] = "and ",
+    [(int)Opcode::XorVal] = "xor ",
+    //[(int)Opcode::LshVal] = "N/A ",
+    //[(int)Opcode::RshVal] = "N/A ",
+    [(int)Opcode::AddVal] = "add ",
+    [(int)Opcode::SubVal] = "sub ",
+    [(int)Opcode::SingleOp] = "",
+    [(int)Opcode::OrReg] = "or ",
+    [(int)Opcode::AndReg] = "and ",
+    [(int)Opcode::XorReg] = "xor ",
+    [(int)Opcode::LshReg] = "lsh ",
+    [(int)Opcode::RshReg] = "rsh ",
+    [(int)Opcode::LrotReg] = "lrt ",
+    [(int)Opcode::RrotReg] = "rrt ",
+    [(int)Opcode::AddReg] = "add ",
+    [(int)Opcode::SubReg] = "sub ",
+    [(int)Opcode::SetVal] = "set ",
+    [(int)Opcode::LodB] = "set ",
+    [(int)Opcode::LodW] = "set ",
+    [(int)Opcode::StrB] = "put ",
+    [(int)Opcode::StrW] = "put ",
+    [(int)Opcode::JmpZ] = "jz ",
+    [(int)Opcode::JmpNz] = "jnz ",
+    [(int)Opcode::JmpC] = "jc ",
+    [(int)Opcode::JmpNc] = "jnc ",
+    [(int)Opcode::JmpS] = "js ",
+    [(int)Opcode::JmpNs] = "jns ",
+    [(int)Opcode::JmpO] = "jo ",
+    [(int)Opcode::JmpNo] = "jno ",
+    [(int)Opcode::OpOnly] = ""
   };
 
   std::string result;
