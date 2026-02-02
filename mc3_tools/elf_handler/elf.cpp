@@ -1,5 +1,7 @@
 #include "elf.hpp"
 
+#include <fstream>
+
 const uint8_t ELF32::ident[EI_NIDENT] = {
   ELFMAG0,
   ELFMAG1,
@@ -12,6 +14,8 @@ const uint8_t ELF32::ident[EI_NIDENT] = {
 };
 
 // Segments and sections can overlap
+
+// This initializes a basic elf file
 ELF32::ELF32(uint16_t entryPoint)
 {
   this->file.clear();
@@ -24,6 +28,13 @@ ELF32::ELF32(uint16_t entryPoint)
 
   this->addSection(SHT_STRTAB, 0, 1); // We have to initialize the string table first before adding its name
   this->sectionHeader(1)->sh_name = this->addString(".dynstr");
+}
+
+// This loads an existing elf file
+ELF32::ELF32(const uint8_t* begin, const uint8_t* end)
+{
+  this->file.clear();
+  this->file.insert(this->file.begin(), begin, end);
 }
 
 // Type can be any PT_* value as defined in elf.h
@@ -158,6 +169,23 @@ void ELF32::addSymbolTable(SymbolData* symbols, Elf32_Word count)
 
     *(Elf32_Sym*)(tableStart+sizeof(Elf32_Sym)*(s+1)) = symbol;
   }
+}
+
+ELF32::SymbolTable ELF32::getSymbolTable(Elf32_Half index)
+{
+  Elf32_Shdr* symHeader = this->sectionHeader(index);
+  if (symHeader == nullptr || symHeader->sh_type != SHT_SYMTAB)
+  {
+    return {0, 0, 0};
+  }
+
+  Elf32_Shdr* strHeader = this->sectionHeader(symHeader->sh_link);
+
+  return {
+    .strings = strHeader->sh_offset,
+    .symbols = symHeader->sh_offset,
+    .symbolCount = (Elf32_Half)(symHeader->sh_size / symHeader->sh_entsize),
+  };
 }
 
 bool ELF32::valid()
@@ -360,5 +388,87 @@ bool ELF32::syncPointer(
   }
 
   return false;
+}
+
+std::vector<uint8_t> getBinary(
+  std::string filename,
+  std::map<uint16_t, SymbolData>* symbols)
+{
+  std::filebuf inputFile;
+  inputFile.open(filename, std::ios::in | std::ios::binary);
+  if (inputFile.is_open())
+  {
+    uint16_t size = inputFile.pubseekoff(0, std::ios::end);
+    inputFile.pubseekoff(0, std::ios::beg);
+
+    std::vector<uint8_t> fileData(size);
+    inputFile.sgetn((char*)fileData.data(), size);
+
+    inputFile.close();
+
+    ELF32 elfFile(fileData.data(), fileData.data()+size);
+    if (elfFile.valid())
+    {
+      // This is safe to do because the ELF32 constructor copies the file contents
+      fileData.clear();
+
+      for (uint16_t p = 0; Elf32_Phdr* pHeader = elfFile.programHeader(p); p++)
+      {
+        if (pHeader->p_type != PT_LOAD)
+        {
+          continue;
+        }
+        
+        if (fileData.size() < pHeader->p_vaddr + pHeader->p_memsz)
+        {
+          fileData.resize(pHeader->p_vaddr + pHeader->p_memsz);
+        }
+
+        uint8_t* startPtr = elfFile.data()+pHeader->p_offset;
+        std::copy(
+          startPtr,
+          startPtr + pHeader->p_filesz,
+          fileData.data() + pHeader->p_vaddr
+        );
+      }
+
+      if (symbols == nullptr)
+      {
+        return fileData;
+      }
+
+      for (uint16_t s = 0; Elf32_Shdr* sHeader = elfFile.sectionHeader(s); s++)
+      {
+        if (sHeader->sh_type != SHT_SYMTAB)
+        {
+          continue;
+        }
+        ELF32::SymbolTable symTab = elfFile.getSymbolTable(s);
+        
+        const char* strTable = (const char*)elfFile.data() + symTab.strings;
+
+        Elf32_Sym* symbolList = (Elf32_Sym*)(elfFile.data() + symTab.symbols);
+        for (uint16_t sym = 0; sym < symTab.symbolCount; sym++)
+        {
+          Elf32_Sym symbol = symbolList[sym];
+          if (*(strTable+symbol.st_name) == 0)
+          {
+            continue;
+          }
+          (*symbols)[symbol.st_value] = {
+            .type = ELF32_ST_TYPE(symbol.st_info) == STT_OBJECT ?
+              SymbolData::Variable :
+              SymbolData::Label,
+            .name = strTable + symbol.st_name,
+            .size = (uint16_t)symbol.st_size,
+          };
+        }
+      }
+    }
+
+    return fileData;
+  }
+
+  return {};
 }
 

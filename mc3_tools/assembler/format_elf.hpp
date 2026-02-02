@@ -23,7 +23,7 @@ std::vector<uint8_t> formatELF(
 
   result.addSymbolTable(symbolTable.data(), symbolTable.size());
 
-  logElfInfo(result);
+  //logElfInfo(result);
 
   return std::vector<uint8_t>(result.data(), result.data() + result.size());
 }
@@ -34,20 +34,16 @@ void logElfInfo(ELF32& elf)
   std::cout << "HEADER\n";
 
   std::cout << "SEGMENTS\n";
-  Elf32_Phdr* pHeader = elf.programHeader(0);
-  for (uint8_t s = 1; pHeader != nullptr; s++)
+  for (uint8_t s = 0; Elf32_Phdr* pHeader = elf.programHeader(s); s++)
   {
     std::cout << "type: " << pHeader->p_type << '\n';
-    pHeader = elf.programHeader(s);
   }
 
   std::cout << "SECTIONS\n";
-  Elf32_Shdr* sHeader = elf.sectionHeader(0);
-  for (uint8_t s = 1; sHeader != nullptr; s++)
+  for (uint8_t s = 0; Elf32_Shdr* sHeader = elf.sectionHeader(s); s++)
   {
     std::cout << "type: " << sHeader->sh_type << '\n';
     std::cout << "strPos: " << sHeader->sh_name << '\n';
     std::cout << "dataPos: " << sHeader->sh_offset << '\n';
-    sHeader = elf.sectionHeader(s);
   }
 }

@@ -32,6 +32,9 @@ std::string filename;
 
 #include "handle_args.hpp"
 
+#include "../elf_handler/elf.hpp"
+#include "../elf_handler/elf.cpp"
+
 #include "clock.hpp"
 
 #include "debug_window.hpp"
@@ -71,14 +74,8 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  std::ifstream inputFile(filename);
-
-  std::stringstream program;
-  program << inputFile.rdbuf();
-
-  inputFile.close();
-
-  program.str().copy((char*)ram.memory, -1);
+  std::vector<uint8_t> binary = getBinary(filename, &debugWindow.symbols);
+  std::copy(binary.begin(), binary.end(), ram.memory);
 
   bool running = true;
   while (running)

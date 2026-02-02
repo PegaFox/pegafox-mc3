@@ -1,22 +1,23 @@
 #include <iostream>
-#include <array>
+#include <vector>
 #include <format>
-#include <sstream>
+#include <map>
 #include <fstream>
-
-std::string filename = "a.out";
-
-std::array<uint8_t, UINT16_MAX+1> program;
 
 #include "handle_args.hpp"
 
 #include "../mc3_utils.hpp"
 
+#include "../elf_handler/elf.hpp"
+#include "../elf_handler/elf.cpp"
+
 #include "disassemble_instruction.hpp"
 
 int main(int argc, char* argv[])
 {
-  handleArgs(argc, argv);
+  std::string filename = "a.out";
+  
+  handleArgs(argc, argv, filename);
 
   if (filename.empty())
   {
@@ -24,19 +25,53 @@ int main(int argc, char* argv[])
     return 10;
   }
 
-  std::ifstream inputFile(filename);
+  //std::array<uint8_t, UINT16_MAX+1> program;
+  std::map<uint16_t, SymbolData> symbols;
+  const std::vector<uint8_t> program = getBinary(filename, &symbols);
 
-  std::stringstream fileText;
-  fileText << inputFile.rdbuf();
-
-  inputFile.close();
-
-  uint16_t end = fileText.str().size();
-
-  fileText.str().copy((char*)program.data(), -1);
-
-  for (uint16_t i = 0; i < end; i += 2)
+  if (program.empty())
   {
+    std::clog << "Disassembly failed, could not open file \"" << 
+      filename << "\"\n";
+    return 11;
+  }
+
+  std::map<uint16_t, SymbolData>::iterator currentVar = symbols.end();
+  for (uint16_t i = 0; i < program.size(); i += 2)
+  {
+    if (currentVar != symbols.end())
+    {
+      if (i >= currentVar->first + currentVar->second.size)
+      {
+        if (symbols.contains(i))
+        {
+          std::cout << "} ";
+        } else
+        {
+          std::cout << "}\n";
+          currentVar = symbols.end();
+        }
+      }
+    }
+
+    if (symbols.contains(i))
+    {
+      std::cout << symbols[i].name;
+      if (symbols[i].type == SymbolData::Variable)
+      {
+        std::cout << "\n{\n";
+        currentVar = symbols.find(i);
+      } else if (symbols[i].type == SymbolData::Label)
+      {
+        std::cout << ":\n";
+      }
+    }
+
+    //if (currentVar != symbols.end())
+    //{
+    //  std::cout << "  ";
+    //}
+
     std::cout << "| " << std::format("{:>4X}", uint16_t(i)) << " | ";
 
     std::cout << std::format("{:02X}", program[i] >> 3) << " ";
@@ -75,5 +110,11 @@ int main(int argc, char* argv[])
     //if (i == 255) break;
   }
 
+  if (currentVar != symbols.end())
+  {
+    std::cout << "}\n";
+  }
+
   return 0;
 }
+

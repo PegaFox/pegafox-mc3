@@ -767,6 +767,7 @@ std::vector<uint8_t> assemble(
         
         for (uint8_t i = 0; i < operations.size(); i++)
         {
+          program[pos >> 1].type = operations[i].type;
           program[pos >> 1].data = operations[i].data;
           pos += 2;
         }

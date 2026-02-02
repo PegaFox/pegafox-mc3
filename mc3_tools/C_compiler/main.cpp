@@ -25,11 +25,14 @@
 #include "optimize_asm.hpp"
 
 #include "../assembler/assemble.hpp"
+#include "../assembler/format_elf.hpp"
+#include "../elf_handler/elf.cpp"
 
 #include "../disassembler/disassemble_instruction.hpp"
 
 bool useStdlib = true;
 bool staticLinkStdlib = false;
+bool rawBinary = false;
 
 int main(int argc, char* argv[])
 {
@@ -44,6 +47,9 @@ int main(int argc, char* argv[])
     } else if (arg == "-static" || arg == "--static" || arg == "-static-libc" || arg == "--static-libc")
     {
       staticLinkStdlib = true;
+    } else if (arg == "-raw" || arg == "--raw")
+    {
+      rawBinary = true;
     }
   }
 
@@ -126,7 +132,13 @@ int main(int argc, char* argv[])
 
   //std::cout << "Intermediate Representation:\n" << compiler.printIR(irCode) << '\n';
 
-  std::vector<uint8_t> binary = assemble(assembly);
+  std::vector<ELF32::SymbolData> symbolTable;
+  std::vector<uint8_t> binary = assemble(assembly, &symbolTable);
+
+  if (!rawBinary)
+  {
+    binary = formatELF(binary, symbolTable);
+  }
 
   std::filebuf file;
   file.open(compiler.outputFilename, std::ios::out | std::ios::binary);

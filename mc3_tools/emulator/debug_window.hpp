@@ -8,8 +8,10 @@
 #include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/Text.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
+#include <map>
 #include "gui-lib/include/gui.h"
 #include "../disassembler/disassemble_instruction.hpp"
+#include "../elf_handler/elf.hpp"
 #include "virt_machine.hpp"
 #include "emu-utils/ram.hpp"
 
@@ -33,6 +35,8 @@ class DebugWindow
     };
 
     bool pause = false;
+
+    std::map<uint16_t, SymbolData> symbols;
 
     DebugWindow()
     {
@@ -599,11 +603,54 @@ class DebugWindow
 
               uint32_t* drawStart = &((pfui::Paragraph*)(win)[win.childCount()-1])->drawStart;
 
+              std::map<uint16_t, SymbolData>::iterator currentVar =
+                symbols.end();
+              if (!symbols.empty())
+              {
+                std::map<uint16_t, SymbolData>::iterator lastSym =
+                  --symbols.upper_bound(*drawStart);
+                if (
+                  lastSym->second.type == SymbolData::Variable &&
+                  lastSym->first + lastSym->second.size > *drawStart)
+                {
+                  currentVar = lastSym;
+                }
+              }
+
               *drawStart = glm::min(sizeof(ram.memory)-22, (size_t)*drawStart);
               for (uint32_t b = *drawStart; b < *drawStart+22; b++)
               {
+                if (currentVar != symbols.end())
+                {
+                  if (b >= currentVar->first + currentVar->second.size)
+                  {
+                    if (symbols.contains(b))
+                    {
+                      winData += "} ";
+                    } else
+                    {
+                      winData += "}\n";
+                      currentVar = symbols.end();
+                    }
+                  }
+                }
+
+                if (symbols.contains(b))
+                {
+                  winData += symbols[b].name;
+
+                  if (symbols[b].type == SymbolData::Variable)
+                  {
+                    winData += " {\n";
+                    currentVar = symbols.find(b);
+                  } else if (symbols[b].type == SymbolData::Label)
+                  {
+                    winData += ":\n";
+                  }
+                }
+
                 winData += std::format("{:04X}:{:02X}", uint16_t(b), ram.memory[b]);
-                if (b%2)
+                if (b%2 && currentVar == symbols.end())
                 {
                   winData += (b == vm.pc+1 ? ">" : " ") + disassembleInstruction(ram.memory[b-1], ram.memory[b]);
                 }

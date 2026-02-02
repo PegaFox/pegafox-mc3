@@ -816,6 +816,10 @@ std::vector<std::string> assembleIR(IRprogram& IR)
             });
           };
 
+          assembly.insert(assembly.end(), {
+            "rsh", "d0", "15",
+          });
+
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetGreaterOrEqual:

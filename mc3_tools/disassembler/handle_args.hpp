@@ -1,8 +1,6 @@
 #include <cstdint>
 #include <iostream>
 
-extern std::string filename;
-
 void showHelp()
 {
   std::cout << R"(
@@ -24,7 +22,7 @@ Examples:
 )";
 }
 
-void handleArgs(int argc, char* argv[])
+void handleArgs(int argc, char* argv[], std::string& filename)
 {
   if (argc == 1)
   {
