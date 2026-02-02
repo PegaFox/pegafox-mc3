@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-const char* message = "Hello, World!\n";
+static const char* message = "Hello, World!\n";
 
 void helloWorld()
 {

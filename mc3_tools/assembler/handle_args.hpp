@@ -19,7 +19,7 @@ Input file must have a .s file extension.
 
 Options:
   -h, --help                              Show this help text
-  -r, --raw                               Generate a raw binary, if this is not included, the assembler generates an executable with an ELF-like segment descriptor format
+  -r, --raw                               Generate a raw binary, if this is not included, the assembler generates an executable with an ELF format
   -o <outputFile>, --output <outputFile>  Specify output file, defaults to a.out
 
 Examples:

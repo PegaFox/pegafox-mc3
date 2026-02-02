@@ -204,4 +204,3 @@ var snakeBegin[1] @0x00FE = 0x00
 var snakeEnd[1] @0x00FF = 0x04
 var snake[256] @0x0100
 
-

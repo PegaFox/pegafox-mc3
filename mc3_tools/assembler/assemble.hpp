@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <array>
@@ -8,6 +9,8 @@
 #include <glm/common.hpp>
 
 #include "../mc3_utils.hpp"
+
+#include "../elf_handler/elf.hpp"
 
 #include "expression-parser/expression.hpp"
 
@@ -36,8 +39,149 @@ const Operator::StaticData operatorTypes[OperatorType::Max] = {
   [OperatorType::Divide] = {.pattern = std::regex("/"), .hasChildren = true, .priority = 2, .leftPriority = false}
 };
 
-typedef std::pair<std::array<uint8_t, 2>, std::vector<Operator>> asmOperation;
-typedef std::array<asmOperation, INT16_MAX+1> asmProgram;
+struct AsmOperation
+{
+  /*// Needs constructor to make sure vector.emplace_back() works
+  AsmOperation(Opcode type, uint8_t data[2], const std::vector<Operator>& expression): type(type), expression(expression)
+  {
+    std::copy(data, data + 2, this->data);
+  }*/
+
+  // This field is important for multi-instruction operations and should not be removed
+  Opcode type;
+  std::array<uint8_t, 2> data = {0};
+  std::vector<Operator> expression;
+
+  AsmOperation()
+  {
+
+  }
+
+  // opcode(5) + secondaryOpcode(11)
+  AsmOperation(Opcode opcode, OnlyOpcode secondaryOpcode)
+  {
+    this->type = opcode;
+    create(opcode, secondaryOpcode);
+  }
+
+  AsmOperation(Opcode type, Opcode opcode, OnlyOpcode secondaryOpcode)
+  {
+    this->type = type;
+    create(opcode, secondaryOpcode);
+  }
+
+  // opcode(5) + reg(3) + secondaryOpcode(8)
+  AsmOperation(Opcode opcode, Reg reg, SingleOpcode secondaryOpcode)
+  {
+    this->type = opcode;
+    create(opcode, reg, secondaryOpcode);
+  }
+
+  AsmOperation(Opcode type, Opcode opcode, Reg reg, SingleOpcode secondaryOpcode)
+  {
+    this->type = type;
+    create(opcode, reg, secondaryOpcode);
+  }
+
+  // opcode(5) + reg(3) + value(8)
+  AsmOperation(Opcode opcode, Reg reg, uint8_t value)
+  {
+    this->type = opcode;
+    create(opcode, reg, value);
+  }
+
+  AsmOperation(Opcode type, Opcode opcode, Reg reg, uint8_t value)
+  {
+    this->type = type;
+    create(opcode, reg, value);
+  }
+
+  // opcode(5) + reg(3) + reg(3) + reg(3) + valueBit(1) + useValue(1)
+  AsmOperation(Opcode opcode, Reg resultReg, Reg lhsReg, Reg rhsReg)
+  {
+    this->type = opcode;
+    create(opcode, resultReg, lhsReg, rhsReg);
+  }
+
+  AsmOperation(Opcode type, Opcode opcode, Reg resultReg, Reg lhsReg, Reg rhsReg)
+  {
+    this->type = type;
+    create(opcode, resultReg, lhsReg, rhsReg);
+  }
+
+  // opcode(5) + reg(3) + reg(3) + reg(3) + valueBit(1) + useValue(1)
+  AsmOperation(Opcode opcode, Reg resultReg, Reg lhsReg, uint8_t value)
+  {
+    this->type = opcode;
+    create(opcode, resultReg, lhsReg, value);
+  }
+
+  AsmOperation(Opcode type, Opcode opcode, Reg resultReg, Reg lhsReg, uint8_t value)
+  {
+    this->type = type;
+    create(opcode, resultReg, lhsReg, value);
+  }
+
+  // opcode(5) + reg(3) + reg(2) + value(6)
+  //AsmOperation(Opcode opcode, Reg resultReg, Reg memReg, uint8_t offset)
+  //{
+  //  data[0] = ((uint8_t)opcode << 3) | (uint8_t)resultReg;
+  //  data[1] = (((uint8_t)memReg & 0x3) << 5) | (offset & 0x3F);
+  //}
+
+  //inline Opcode type()
+  //{
+  //  return Opcode(data[0] >> 3);
+  //}
+
+  private:
+    // opcode(5) + secondaryOpcode(11)
+    void create(Opcode opcode, OnlyOpcode secondaryOpcode)
+    {
+      data[0] = ((uint8_t)opcode << 3) | ((uint8_t)secondaryOpcode >> 8);
+      data[1] = (uint8_t)secondaryOpcode & 0xFF;
+    }
+
+    // opcode(5) + reg(3) + secondaryOpcode(8)
+    void create(Opcode opcode, Reg reg, SingleOpcode secondaryOpcode)
+    {
+      data[0] = ((uint8_t)opcode << 3) | (uint8_t)reg;
+      data[1] = (uint8_t)secondaryOpcode & 0xFF;
+    }
+
+    // opcode(5) + reg(3) + value(8)
+    void create(Opcode opcode, Reg reg, uint8_t value)
+    {
+      data[0] = ((uint8_t)opcode << 3) | (uint8_t)reg;
+      data[1] = value;
+    }
+
+    // opcode(5) + reg(3) + reg(3) + reg(3) + valueBit(1) + useValue(1)
+    void create(Opcode opcode, Reg resultReg, Reg lhsReg, Reg rhsReg)
+    {
+      data[0] = ((uint8_t)opcode << 3) | (uint8_t)resultReg;
+      data[1] = ((uint8_t)lhsReg << 5) | ((uint8_t)rhsReg << 2);
+    }
+
+    // opcode(5) + reg(3) + reg(3) + reg(3) + valueBit(1) + useValue(1)
+    void create(Opcode opcode, Reg resultReg, Reg lhsReg, uint8_t value)
+    {
+      if (
+        opcode == Opcode::LodB ||
+        opcode == Opcode::LodW ||
+        opcode == Opcode::StrB ||
+        opcode == Opcode::StrW)
+      {
+        data[0] = ((uint8_t)opcode << 3) | (uint8_t)resultReg;
+        data[1] = (((uint8_t)lhsReg & 0x3) << 5) | (value & 0x3F);
+      } else
+      {
+        data[0] = ((uint8_t)opcode << 3) | (uint8_t)resultReg;
+        data[1] = ((uint8_t)lhsReg << 5) | ((value & 0xF) << 1) | 1;
+      }
+    }
+};
+typedef std::array<AsmOperation, INT16_MAX+1> asmProgram;
 
 bool isReg(const std::string& reg)
 {
@@ -55,7 +199,7 @@ bool isReg(const std::string& reg)
   return false;
 }
 
-uint8_t getReg(const std::string& reg)
+Reg getReg(const std::string& reg)
 {
   if (!isReg(reg))
   {
@@ -65,10 +209,10 @@ uint8_t getReg(const std::string& reg)
 
   if (reg[0] == 'm' || reg[0] == 'r')
   {
-    return reg[1] - '0';
+    return Reg(reg[1] - '0');
   } else
   {
-    return reg[1] - '0' + 4;
+    return Reg(reg[1] - '0' + 4);
   }
 }
 
@@ -243,21 +387,21 @@ std::vector<uint8_t> parseArray(const std::vector<std::string>& tokens, std::siz
   return result;
 }
 
-uint8_t getReg3(const std::vector<std::string>& tokens, std::size_t& t, uint8_t firstReg, std::map<std::string, std::array<uint16_t, 2>>& variables, std::vector<Operator>* expression = nullptr)
+uint8_t getReg3(const std::vector<std::string>& tokens, std::size_t& t, Reg firstReg, std::map<std::string, std::array<uint16_t, 2>>& variables, std::vector<Operator>* expression = nullptr)
 {
-  uint8_t out = getReg(tokens[t]) << 5;
+  uint8_t out = (uint8_t)getReg(tokens[t]) << 5;
 
   if (isReg(tokens[t+1]))
   {
     t++;
-    out |= getReg(tokens[t]) << 2;
+    out |= (uint8_t)getReg(tokens[t]) << 2;
   } else if (tokens[t+1][0] >= '0' && tokens[t+1][0] <= '9')
   {
     t++;
     out |= (parseInt(variables, tokens, t, expression) << 1) | 1;
   } else
   {
-    out = (firstReg << 5) | (out >> 3);
+    out = ((uint8_t)firstReg << 5) | (out >> 3);
   }
 
   return out;
@@ -265,7 +409,7 @@ uint8_t getReg3(const std::vector<std::string>& tokens, std::size_t& t, uint8_t 
 
 uint8_t getReg2Off6(const std::vector<std::string>& tokens, std::size_t& t, std::map<std::string, std::array<uint16_t, 2>>& variables, std::vector<Operator>* expression = nullptr)
 {
-  uint8_t out = getReg(tokens[t]) << 6;
+  uint8_t out = (uint8_t)getReg(tokens[t]) << 6;
 
   if (tokens[t+1] == "+" || tokens[t+1] == "-")
   {
@@ -276,11 +420,11 @@ uint8_t getReg2Off6(const std::vector<std::string>& tokens, std::size_t& t, std:
   return out;
 }
 
-asmOperation getALUbinaryOperation(const std::vector<std::string>& tokens, std::size_t& t, std::map<std::string, std::array<uint16_t, 2>>& variables, Opcode regCode, Opcode valCode)
+AsmOperation getALUbinaryOperation(const std::vector<std::string>& tokens, std::size_t& t, std::map<std::string, std::array<uint16_t, 2>>& variables, Opcode regCode, Opcode valCode)
 {
-  asmOperation operation;
+  AsmOperation operation;
 
-  uint8_t mainReg = getReg(tokens[t++]);
+  Reg mainReg = getReg(tokens[t++]);
 
   if (valCode == Opcode::None || isReg(tokens[t]))
   {
@@ -289,56 +433,44 @@ asmOperation getALUbinaryOperation(const std::vector<std::string>& tokens, std::
       t--;
     }
 
-    operation.first[0] = (uint8_t(regCode) << 3) | mainReg;
+    operation = AsmOperation(regCode, mainReg, 0);
 
-    operation.first[1] = getReg3(tokens, t, mainReg, variables, &operation.second);
+    operation.data[1] = getReg3(tokens, t, mainReg, variables, &operation.expression);
   } else
   {
-    operation.first[0] = (uint8_t(valCode) << 3) | mainReg;
+    operation = AsmOperation(valCode, mainReg, 0);
 
-    operation.first[1] = parseInt(variables, tokens, t, &operation.second);
+    operation.data[1] = parseInt(variables, tokens, t, &operation.expression);
   }
 
   return operation;
 }
 
-std::array<uint8_t, 2> getUnaryOperation(const std::vector<std::string>& tokens, std::size_t& t, Opcode opcode)
+AsmOperation getJumpOperation(const std::vector<std::string>& tokens, std::size_t& t, std::map<std::string, std::array<uint16_t, 2>>& variables, Opcode opcode)
 {
-  std::array<uint8_t, 2> operation;
+  AsmOperation operation;
 
-  uint8_t mainReg = getReg(tokens[t]);
+  Reg mainReg = getReg(tokens[t]);
 
-  operation[0] = (uint8_t(opcode) << 3) | mainReg;
-  operation[1] = 0;
-
-  return operation;
-}
-
-asmOperation getJumpOperation(const std::vector<std::string>& tokens, std::size_t& t, std::map<std::string, std::array<uint16_t, 2>>& variables, Opcode opcode)
-{
-  asmOperation operation;
-
-  uint8_t mainReg = getReg(tokens[t]);
-
-  operation.first[0] = (uint8_t(opcode) << 3) | mainReg;
+  operation.data[0] = (uint8_t(opcode) << 3) | (uint8_t)mainReg;
 
   if (t < tokens.size()-1 && (tokens[t+1] == "+" || tokens[t+1] == "-"))
   {
     t++;
-    operation.first[1] = tokens[t] == "+" ? parseInt(variables, tokens, ++t, &operation.second) & 0xFF : -parseInt(variables, tokens, ++t, &operation.second) & 0xFF;
+    operation.data[1] = tokens[t] == "+" ? parseInt(variables, tokens, ++t, &operation.expression) & 0xFF : -parseInt(variables, tokens, ++t, &operation.expression) & 0xFF;
   }
 
   return operation;
 }
 
-std::vector<asmOperation> getImm8Operation(Opcode opcode, uint8_t mainReg, uint16_t value, uint8_t minCommandCount = 0)
+std::vector<AsmOperation> getImm8Operation(Opcode opcode, Reg mainReg, uint16_t value, uint8_t minCommandCount = 0)
 {
-  std::vector<asmOperation> operations;
+  std::vector<AsmOperation> operations;
   operations.reserve(minCommandCount);
 
   if ((value & 0xFF) == value)
   {
-    operations.emplace_back(std::array<uint8_t, 2>{uint8_t((uint8_t(opcode) << 3) | mainReg), (uint8_t)value}, std::vector<Operator>{});
+    operations.emplace_back(opcode, mainReg, value);
   } else
   {
     switch (opcode)
@@ -349,17 +481,17 @@ std::vector<asmOperation> getImm8Operation(Opcode opcode, uint8_t mainReg, uint1
         if ((value & 0xFF00) == value)
         {
           operations.insert(operations.end(), {
-            {{uint8_t((uint8_t(Opcode::LrotReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
-            {{uint8_t((uint8_t(opcode) << 3) | mainReg), uint8_t(value >> 8)}, {}},
-            {{uint8_t((uint8_t(Opcode::LrotReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
+            {opcode, Opcode::LrotReg, mainReg, mainReg, 8},
+            {opcode, mainReg, uint8_t(value >> 8)},
+            {opcode, Opcode::LrotReg, mainReg, mainReg, 8},
           });
         } else
         {
           operations.insert(operations.end(), {
-            {{uint8_t((uint8_t(Opcode::LrotReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
-            {{uint8_t((uint8_t(opcode) << 3) | mainReg), uint8_t(value >> 8)}, {}},
-            {{uint8_t((uint8_t(Opcode::LrotReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
-            {{uint8_t((uint8_t(opcode) << 3) | mainReg), uint8_t(value & 0xFF)}, {}},
+            {opcode, Opcode::LrotReg, mainReg, mainReg, 8},
+            {opcode, mainReg, uint8_t(value >> 8)},
+            {opcode, Opcode::LrotReg, mainReg, mainReg, 8},
+            {opcode, mainReg, uint8_t(value & 0xFF)},
           });
         }
         break;
@@ -368,17 +500,24 @@ std::vector<asmOperation> getImm8Operation(Opcode opcode, uint8_t mainReg, uint1
         std::cerr << "ERROR: attempt to resolve unimplemented multiop instruction (opcode = " << int(opcode) << ", value = " << value << ")\n";
         break;
       case Opcode::AddVal:
-        while (value > 0xFF)
+        if (value < 0xFF01)
         {
-          operations.emplace_back(std::array<uint8_t, 2>{uint8_t((uint8_t(Opcode::AddVal) << 3) | mainReg), 0xFF}, std::vector<Operator>{});
+          while (value > 0xFF)
+          {
+            operations.emplace_back(opcode, Opcode::AddVal, mainReg, 0xFF);
 
-          value -= 0xFF;
+            value -= 0xFF;
+          }
+
+          if (value > 0)
+          {
+            operations.emplace_back(opcode, Opcode::AddVal, mainReg, (uint8_t)value);
+          }
+        } else
+        {
+          operations.emplace_back(opcode, Opcode::SubVal, mainReg, uint8_t(0x10000 - value));
         }
 
-        if (value > 0)
-        {
-          operations.emplace_back(std::array<uint8_t, 2>{uint8_t((uint8_t(Opcode::AddVal) << 3) | mainReg), uint8_t(value)}, std::vector<Operator>{});
-        }
         break;
       case Opcode::SubVal:
       case Opcode::JmpZ:
@@ -395,21 +534,21 @@ std::vector<asmOperation> getImm8Operation(Opcode opcode, uint8_t mainReg, uint1
         if ((value & 0xFF00) == value)
         {
           operations.insert(operations.end(), {
-            {{uint8_t((uint8_t(Opcode::SetVal) << 3) | mainReg), uint8_t(value >> 8)}, {}},
-            {{uint8_t((uint8_t(Opcode::LshReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
+            {opcode, Opcode::SetVal, mainReg, uint8_t(value >> 8)},
+            {opcode, Opcode::LshReg, mainReg, mainReg, 8},
           });
         } else if (value > 0xFF00)
         {
           operations.insert(operations.end(), {
-            {{uint8_t((uint8_t(Opcode::SetVal) << 3) | mainReg), 0}, {}},
-            {{uint8_t((uint8_t(Opcode::SubVal) << 3) | mainReg), uint8_t(-(value & 0xFF))}, {}},
+            {opcode, Opcode::SetVal, mainReg, 0},
+            {opcode, Opcode::SubVal, mainReg, uint8_t(-(value & 0xFF))},
           });
         } else
         {
           operations.insert(operations.end(), {
-            {{uint8_t((uint8_t(Opcode::SetVal) << 3) | mainReg), uint8_t(value >> 8)}, {}},
-            {{uint8_t((uint8_t(Opcode::LshReg) << 3) | mainReg), uint8_t((mainReg << 5) | (8 << 1) | 1)}, {}},
-            {{uint8_t((uint8_t(Opcode::AddVal) << 3) | mainReg), uint8_t(value & 0xFF)}, {}},
+            {opcode, Opcode::SetVal, mainReg, uint8_t(value >> 8)},
+            {opcode, Opcode::LshReg, mainReg, mainReg, 8},
+            {opcode, Opcode::AddVal, mainReg, uint8_t(value & 0xFF)},
           });
         }
         break;
@@ -419,7 +558,7 @@ std::vector<asmOperation> getImm8Operation(Opcode opcode, uint8_t mainReg, uint1
   // If space is needed, pad with no-ops
   while (operations.size() < minCommandCount)
   {
-    operations.emplace_back(std::array<uint8_t, 2>{1, 0}, std::vector<Operator>{});
+    operations.emplace_back(Opcode::OrVal, Reg::m1, 0);
   }
 
   return operations;
@@ -435,9 +574,9 @@ asmProgram resolveLabels(asmProgram program, std::map<std::string, std::array<ui
 
     for (uint16_t o = 0; o < program.size(); o++)
     {
-      if (!program[o].second.empty())
+      if (!program[o].expression.empty())
       {
-        std::vector<Operator> expression = program[o].second;
+        std::vector<Operator> expression = program[o].expression;
         uint16_t value = parseConstantExpression(variables, expression);
 
         // I may want to reimplement this functionality elsewhere
@@ -448,7 +587,7 @@ asmProgram resolveLabels(asmProgram program, std::map<std::string, std::array<ui
         }*/
 
         uint8_t operationChainLength = 1;
-        for (; program[o+operationChainLength].second == expression; operationChainLength++) {}
+        for (; program[o+operationChainLength].expression == expression; operationChainLength++) {}
         /*if (program[o+1].second == expression)
         {
           operationChainLength++;
@@ -458,7 +597,7 @@ asmProgram resolveLabels(asmProgram program, std::map<std::string, std::array<ui
           }
         }*/
 
-        switch (Opcode(program[o].first[0] >> 3))
+        switch (program[o].type)
         {
           case Opcode::OrVal:
           case Opcode::AndVal:
@@ -476,7 +615,7 @@ asmProgram resolveLabels(asmProgram program, std::map<std::string, std::array<ui
           case Opcode::JmpNs:
           case Opcode::JmpO:
           case Opcode::JmpNo: {
-            std::vector<asmOperation> operations = getImm8Operation(Opcode(program[o].first[0] >> 3), program[o].first[0] & 0x7, value, 0 + iterations/200);
+            std::vector<AsmOperation> operations = getImm8Operation(program[o].type, Reg(program[o].data[0] & 0x7), value, 0 + iterations/200);
 
             /*if (operations[1].first[0] != 0x00)
             {
@@ -517,13 +656,14 @@ asmProgram resolveLabels(asmProgram program, std::map<std::string, std::array<ui
 
             for (uint8_t i = 0; i < operations.size(); i++)
             {
-              if (program[o+i].first != operations[i].first)
+              //std::cout << (int)i << "\n";
+              if (program[o+i].data != operations[i].data)
               {
                 changed = true;
               }
                   
-              program[o+i].first = operations[i].first;
-              program[o+i].second = expression;
+              program[o+i].data = operations[i].data;
+              program[o+i].expression = expression;
             }
 
             o += operations.size()-1;
@@ -537,14 +677,14 @@ asmProgram resolveLabels(asmProgram program, std::map<std::string, std::array<ui
           case Opcode::RrotReg:
           case Opcode::AddReg:
           case Opcode::SubReg:
-            std::cerr << "ERROR: attempt to resolve non-trivial expression for unimplemented imm4 instruction (opcode = " << int(program[o].first[0] >> 3) << ")\n";
+            std::cerr << "ERROR: attempt to resolve non-trivial expression for unimplemented imm4 instruction (opcode = " << int(program[o].type) << ")\n";
             //program[o].first[1] = (program[o].first[1]&0b11100000) | (((program[o].first[1]&0b11111) + var->second[0]) & 0b11111);
             break;
           case Opcode::LodB:
           case Opcode::LodW:
           case Opcode::StrB:
           case Opcode::StrW:
-            std::cerr << "ERROR: attempt to resolve non-trivial expression for unimplemented imm6 instruction (opcode = " << int(program[o].first[0] >> 3) << ")\n";
+            std::cerr << "ERROR: attempt to resolve non-trivial expression for unimplemented imm6 instruction (opcode = " << int(program[o].type) << ")\n";
             //program[o].first[1] = (program[o].first[1]&0b11000000) | (((program[o].first[1]&0b111111) + var->second[0]) & 0b111111);
             break;
           case Opcode::SingleOp:
@@ -561,7 +701,9 @@ asmProgram resolveLabels(asmProgram program, std::map<std::string, std::array<ui
   return program;
 }
 
-std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
+std::vector<uint8_t> assemble(
+  const std::vector<std::string>& tokens,
+  std::vector<ELF32::SymbolData>* symbolTable = nullptr)
 {
   asmProgram program;
 
@@ -586,7 +728,7 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
       pos += 2;
     } else if (tokens[t] == "not")
     {
-      program[pos >> 1].first = getUnaryOperation(tokens, ++t, Opcode::SingleOp);
+      program[pos >> 1] = AsmOperation(Opcode::SingleOp, getReg(tokens[++t]), SingleOpcode::Not);
       pos += 2;
     } else if (tokens[t] == "lsh")
     {
@@ -607,28 +749,25 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
     } else if (tokens[t] == "set")
     {// SetReg, SetVal, LodB, LodW, GetF
       t++;
-      uint8_t mainReg = getReg(tokens[t++]);
+      Reg mainReg = getReg(tokens[t++]);
 
       if (isReg(tokens[t]))
       {
-        program[pos >> 1].first[0] = (uint8_t(Opcode::AddReg) << 3) | mainReg;
-        program[pos >> 1].first[1] = (getReg(tokens[t]) << 5) | 1;
+        program[pos >> 1] = AsmOperation(Opcode::AddReg, mainReg, getReg(tokens[t]), 0);
         //program[pos >> 1].first[0] = (uint8_t(Opcode::SetReg) << 3) | mainReg;
         //program[pos >> 1].first[1] = getReg3(tokens, t, mainReg, variables, &program[pos >> 1].second);
       } else if (tokens[t] == "FLAGS")
       {
-        program[pos >> 1].first[0] = (uint8_t(Opcode::SingleOp) << 3) | mainReg;
-
-        program[pos >> 1].first[1] = (uint8_t)SingleOpcode::GetF;
+        program[pos >> 1] = AsmOperation(Opcode::SingleOp, mainReg, SingleOpcode::GetF);
       } else if (tokens[t].find('@') == std::string::npos && (tokens.size() == t+1 || tokens[t+1].find('@') == std::string::npos))
       {
-        uint16_t value = parseInt(variables, tokens, t, &program[pos >> 1].second);
+        uint16_t value = parseInt(variables, tokens, t, &program[pos >> 1].expression);
 
-        std::vector<asmOperation> operations = getImm8Operation(Opcode::SetVal, mainReg, value);
+        std::vector<AsmOperation> operations = getImm8Operation(Opcode::SetVal, mainReg, value);
         
         for (uint8_t i = 0; i < operations.size(); i++)
         {
-          program[pos >> 1].first = operations[i].first;
+          program[pos >> 1].data = operations[i].data;
           pos += 2;
         }
         pos -= 2;
@@ -642,28 +781,25 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
           t++;
         }
 
-        uint8_t value = getReg2Off6(tokens, ++t, variables, &program[pos >> 1].second);
+        uint8_t value = getReg2Off6(tokens, ++t, variables, &program[pos >> 1].expression);
 
         if (locationSize == 1)
         {
-          program[pos >> 1].first[0] = (uint8_t(Opcode::LodB) << 3) | mainReg;
+          program[pos >> 1] = AsmOperation(Opcode::LodB, mainReg, value);
         } else
         {
-          program[pos >> 1].first[0] = (uint8_t(Opcode::LodW) << 3) | mainReg;
+          program[pos >> 1] = AsmOperation(Opcode::LodW, mainReg, value);
         }
-
-        program[pos >> 1].first[1] = value;
       }
       pos += 2;
     } else if (tokens[t] == "put")
     {// PutI, StrB, StrW
       t++;
-      uint8_t mainReg = getReg(tokens[t++]);
+      Reg mainReg = getReg(tokens[t++]);
 
       if (tokens[t] == "IVEC")
       {
-        program[pos >> 1].first[0] = (uint8_t(Opcode::SingleOp) << 3) | mainReg;
-        program[pos >> 1].first[1] = (uint8_t)SingleOpcode::PutI;
+        program[pos >> 1] = AsmOperation(Opcode::SingleOp, mainReg, SingleOpcode::PutI);
       } else
       {
         uint16_t locationSize = 0;
@@ -676,17 +812,15 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
 
         if (locationSize == 1 || locationSize == 2)
         {
-          uint8_t value = getReg2Off6(tokens, ++t, variables, &program[pos >> 1].second);
+          uint8_t value = getReg2Off6(tokens, ++t, variables, &program[pos >> 1].expression);
 
           if (locationSize == 1)
           {
-            program[pos >> 1].first[0] = (uint8_t(Opcode::StrB) << 3) | mainReg;
+            program[pos >> 1] = AsmOperation(Opcode::StrB, mainReg, value);
           } else
           {
-            program[pos >> 1].first[0] = (uint8_t(Opcode::StrW) << 3) | mainReg;
+            program[pos >> 1] = AsmOperation(Opcode::StrW, mainReg, value);
           }
-
-          program[pos >> 1].first[1] = value;
         } else
         {
           getReg2Off6(tokens, ++t, variables);
@@ -730,31 +864,29 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
       pos += 2;
     } else if (tokens[t] == "iret")
     {
-      program[pos >> 1].first[0] = (uint8_t(Opcode::OpOnly) << 3) | ((uint16_t)OnlyOpcode::IRet >> 8);
-      program[pos >> 1].first[1] = (uint8_t)OnlyOpcode::IRet;
+      program[pos >> 1].data[0] = (uint8_t(Opcode::OpOnly) << 3) | ((uint16_t)OnlyOpcode::IRet >> 8);
+      program[pos >> 1].data[1] = (uint8_t)OnlyOpcode::IRet;
       pos += 2;
     } else if (tokens[t] == "inc")
     {
-      uint8_t mainReg = getReg(tokens[++t]);
+      Reg mainReg = getReg(tokens[++t]);
 
-      program[pos >> 1].first[0] = (uint8_t(Opcode::AddVal) << 3) | mainReg;
-      program[pos >> 1].first[1] = 1;
+      program[pos >> 1] = AsmOperation(Opcode::AddVal, mainReg, 1);
       pos += 2;
     } else if (tokens[t] == "dec")
     {
-      uint8_t mainReg = getReg(tokens[++t]);
+      Reg mainReg = getReg(tokens[++t]);
 
-      program[pos >> 1].first[0] = (uint8_t(Opcode::SubVal) << 3) | mainReg;
-      program[pos >> 1].first[1] = 1;
+      program[pos >> 1] = AsmOperation(Opcode::SubVal, mainReg, 1);
       pos += 2;
     } else if (tokens[t] == "exit")
     {
-      program[pos >> 1].first[0] = (uint8_t(Opcode::SetVal) << 3) | 0;
-      program[pos >> 1].first[1] = 0;
+      program[pos >> 1].data[0] = (uint8_t(Opcode::SetVal) << 3) | 0;
+      program[pos >> 1].data[1] = 0;
       pos += 2;
 
-      program[pos >> 1].first[0] = (uint8_t(Opcode::JmpZ) << 3) | 0;
-      program[pos >> 1].first[1] = int8_t(-2);
+      program[pos >> 1].data[0] = (uint8_t(Opcode::JmpZ) << 3) | 0;
+      program[pos >> 1].data[1] = int8_t(-2);
       pos += 2;
     } else if (tokens[t] == "pos")
     {
@@ -763,7 +895,7 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
     {
       std::string name = tokens[++t];
 
-      if (tokens[t+1] == "[")
+      if (tokens.size() > t+1 && tokens[t+1] == "[")
       {
         t++;
         variables[name][1] = parseInt(variables, tokens, ++t);
@@ -777,7 +909,7 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
         variables[name][1] = -1;
       }
 
-      if (tokens[t+1] == "@")
+      if (tokens.size() > t+1 && tokens[t+1] == "@")
       {
         t++;
         variables[name][0] = parseInt(variables, tokens, ++t);
@@ -787,7 +919,7 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
         variables[name][0] = pos;
       }
 
-      if (tokens[t+1] == "=")
+      if (tokens.size() > t+1 && tokens[t+1] == "=")
       {
         t++;
         std::vector<uint8_t> data = parseArray(tokens, ++t);
@@ -799,7 +931,7 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
 
         for (std::size_t i = 0; i < glm::min(variables[name][1], uint16_t(data.size())); i++)
         {
-          program[(variables[name][0]+i) >> 1].first[(variables[name][0]+i) & 1] = data[i];
+          program[(variables[name][0]+i) >> 1].data[(variables[name][0]+i) & 1] = data[i];
         }
       }
 
@@ -824,8 +956,25 @@ std::vector<uint8_t> assemble(const std::vector<std::string>& tokens)
   binary.resize(std::ceil(float(binarySize)/2.0f) * 2.0f);
   for (std::size_t i = 0; i < binary.size(); i += 2)
   {
-    binary[i] = program[i >> 1].first[0];
-    binary[i+1] = program[i >> 1].first[1];
+    binary[i] = program[i >> 1].data[0];
+    binary[i+1] = program[i >> 1].data[1];
+  }
+
+  if (symbolTable != nullptr)
+  {
+    for (const std::pair<std::string, std::array<uint16_t, 2>>& var: variables)
+    {
+      //std::string name;
+      //Elf32_Addr value;
+      //Elf32_Word size;
+      //uint8_t type;
+      symbolTable->emplace_back(
+        var.first,
+        var.second[0],
+        var.second[1],
+        var.second[1] == 0 ? STT_FUNC : STT_OBJECT
+      );
+    }
   }
 
   return binary;

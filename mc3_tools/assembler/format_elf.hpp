@@ -1,34 +1,53 @@
 #include <cstdint>
+#include <map>
+#include <string>
 #include <vector>
 
-struct MemorySegment
-{
+#include "../elf_handler/elf.hpp"
 
-};
+#include <iostream>
 
-std::vector<uint8_t> formatELF(std::vector<uint8_t> binary)
+void logElfInfo(ELF32& elf);
+
+std::vector<uint8_t> formatELF(
+  std::vector<uint8_t> binary,
+  std::vector<ELF32::SymbolData> symbolTable)
 {
-  binary.insert(binary.begin(), {
-    0x7F, 'E', 'L', 'F', // magic number
-    0x01, // 32 bit header format
-    0x01, // little endian
-    0x01, // header version
-    0x00, // system V ABI
-    0x00, // ABI flags
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 8 padding bytes
-    0x02, // executable object file
-    0x00, // unsupported ISA
-    0x01, // ELF version
-    0x00, 0x00, 0x00, 0x00, // program entry point
-    0x00, 0x00, 0x00, 0x00, // program header table pos
-    0x00, 0x00, 0x00, 0x00, // section header table pos
-    0x00, 0x00, 0x00, 0x00, // flags
-    52, 0x00, // header size
-    32, 0x00, // program header entry size
-    0x00, 0x00, // program header table size
-    40, 0x00, // section header entry size
-    0x00, 0x00, // section header table size
-    0x00, 0x00, // section header string table index
-  });
-  return binary;
+  ELF32 result(0);
+
+  Elf32_Addr pos = result.addSegment(PT_LOAD, 0, binary.size());
+  std::copy(
+    binary.begin(),
+    binary.end(),
+    result.data() + pos);
+
+  result.addSymbolTable(symbolTable.data(), symbolTable.size());
+
+  logElfInfo(result);
+
+  return std::vector<uint8_t>(result.data(), result.data() + result.size());
+}
+
+void logElfInfo(ELF32& elf)
+{
+  Elf32_Ehdr* header = elf.header();
+  std::cout << "HEADER\n";
+
+  std::cout << "SEGMENTS\n";
+  Elf32_Phdr* pHeader = elf.programHeader(0);
+  for (uint8_t s = 1; pHeader != nullptr; s++)
+  {
+    std::cout << "type: " << pHeader->p_type << '\n';
+    pHeader = elf.programHeader(s);
+  }
+
+  std::cout << "SECTIONS\n";
+  Elf32_Shdr* sHeader = elf.sectionHeader(0);
+  for (uint8_t s = 1; sHeader != nullptr; s++)
+  {
+    std::cout << "type: " << sHeader->sh_type << '\n';
+    std::cout << "strPos: " << sHeader->sh_name << '\n';
+    std::cout << "dataPos: " << sHeader->sh_offset << '\n';
+    sHeader = elf.sectionHeader(s);
+  }
 }

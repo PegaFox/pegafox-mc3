@@ -60,6 +60,18 @@ enum class OperationType
   RegValue
 };
 
+enum class Reg
+{
+  m0,
+  m1,
+  m2,
+  m3,
+  d0,
+  d1,
+  d2,
+  d3
+};
+
 const OperationType opcodeTypes[32] = {
   [(int)Opcode::OrVal] = OperationType::ValueOperand,
   [(int)Opcode::AndVal] = OperationType::ValueOperand,

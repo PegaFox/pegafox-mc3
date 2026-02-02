@@ -3,17 +3,17 @@
 
 int main()
 {
-  HDD_SELECTED_BLOCK = 0;
+  *(volatile uint16_t*)(&HDD_SELECTED_BLOCK) = 0;
   for (uint16_t p = 0; p < 256; p++)
   {
     HDD_SELECTED_WORD = p;
     HDD_RW_WORD = p;
 
-    /*TTY = '0' + (p & 0xF);
+    TTY = '0' + (p & 0xF);
     TTY = ',';
     TTY = ' ';
     TTY = '0' + (HDD_RW_WORD & 0xF);
-    TTY = '\n';*/
+    TTY = '\n';
   }
 
   TTY = 'D';

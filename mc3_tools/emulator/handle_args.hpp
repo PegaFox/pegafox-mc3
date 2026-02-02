@@ -14,10 +14,9 @@ Usage:
   mc3emu [options] <file>
 
 Options:
-  -h, --help                     Show this help text
-  -d [device], --debug [device]  Show debug window for specified device, or cpu if omitted
-    Possible devices: all, cpu, ram, vga, tty, hdd, keyboard, mouse, speaker
-  -p, --protect                  Protect memory regions and halt the processor if memory is illegaly written to
+  -h, --help     Show this help text
+  -d, --debug    Show debug window
+  -p, --protect  Protect memory regions and halt the processor if memory is illegaly written to
 
 Examples:
 
@@ -47,44 +46,6 @@ void handleArgs(int argc, char* argv[])
     } else if (arg == "--debug" || arg == "-d")
     {
       debugWindow.create();
-      i++;
-      arg = argv[i];
-      if (arg == "all")
-      {
-        debugWindow.enabledModes.ram = true;
-        debugWindow.enabledModes.vga = true;
-        debugWindow.enabledModes.tty = true;
-        debugWindow.enabledModes.hdd = true;
-        debugWindow.enabledModes.keyboard = true;
-        debugWindow.enabledModes.mouse = true;
-        debugWindow.enabledModes.speaker = true;
-        debugWindow.enabledModes.cpu = true;
-      } else if (arg == "ram")
-      {
-        debugWindow.enabledModes.ram = true;
-      } else if (arg == "vga")
-      {
-        debugWindow.enabledModes.vga = true;
-      } else if (arg == "tty")
-      {
-        debugWindow.enabledModes.tty = true;
-      } else if (arg == "hdd")
-      {
-        debugWindow.enabledModes.hdd = true;
-      } else if (arg == "keyboard")
-      {
-        debugWindow.enabledModes.keyboard = true;
-      } else if (arg == "mouse")
-      {
-        debugWindow.enabledModes.mouse = true;
-      } else if (arg == "speaker")
-      {
-        debugWindow.enabledModes.speaker = true;
-      } else
-      {
-        debugWindow.enabledModes.cpu = true;
-        i--;
-      }
     } else if (arg == "--protect" || arg == "-p")
     {
 

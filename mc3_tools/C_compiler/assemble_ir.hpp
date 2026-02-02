@@ -1,98 +1,247 @@
+#include <cmath>
+#include <iostream>
 #include <vector>
 
 #include "c-compiler-lib/generate_IR.hpp"
+
+struct AssembleIrError {};
 
 struct VarData
 {
   uint16_t index;
 
   PrimitiveType type;
+
+  inline bool onStack() const 
+  {
+    return index != (uint16_t)-1;
+  }
+};
+
+const constexpr std::string_view intConstant = ".0123456789";
+
+inline bool isImmediate(const std::string& var)
+{
+  return var.find_first_not_of(intConstant) == std::string::npos;
+}
+
+// For instructions that have a result value, this is the operand index of the name of the result value. Otherwise, this is -1
+const constexpr int8_t returnIndices[32] = {
+  [Operation::Set] = 0,
+  [Operation::GetAddress] = 0,
+  [Operation::DereferenceLValue] = 0,
+  [Operation::DereferenceRValue] = 0,
+  [Operation::SetAddition] = 0,
+  [Operation::SetSubtraction] = 0,
+  [Operation::SetMultiplication] = 0,
+  [Operation::SetDivision] = 0,
+  [Operation::SetModulo] = 0,
+  [Operation::SetLeftShift] = 0,
+  [Operation::SetRightShift] = 0,
+  [Operation::SetBitwiseAND] = 0,
+  [Operation::SetBitwiseOR] = 0,
+  [Operation::SetBitwiseXOR] = 0,
+  [Operation::SetLogicalAND] = 0,
+  [Operation::SetLogicalOR] = 0,
+  [Operation::SetEqual] = 0,
+  [Operation::SetNotEqual] = 0,
+  [Operation::SetGreater] = 0,
+  [Operation::SetLesser] = 0,
+  [Operation::SetGreaterOrEqual] = 0,
+  [Operation::SetLesserOrEqual] = 0,
+  [Operation::Negate] = 0,
+  [Operation::LogicalNOT] = 0,
+  [Operation::BitwiseNOT] = 0,
+  [Operation::Label] = -1,
+  [Operation::Return] = -1,
+  [Operation::AddArg] = -1,
+  [Operation::Call] = 1,
+  [Operation::Jump] = -1,
+  [Operation::JumpIfZero] = -1,
+  [Operation::JumpIfNotZero] = -1,
 };
 
 const std::string instructionSegmentReg = "m0";
 const std::string dataSegmentReg = "m1";
 const std::string stackSegmentReg = "m2";
 
-void loadFromStack(std::vector<std::string>& assembly, uint16_t index, uint16_t size, uint8_t reg)
+// The largest stack byte offset we can fetch memory from without needing to perform additional operations
+const constexpr uint16_t maxFastStackOffset = 32;
+void loadFromStack(std::vector<std::string>& assembly, uint16_t index, uint16_t size, uint8_t startReg)
 {
-  if (index > 32)
+  /*if (size > 2)
+  {
+    std::cerr << "Error: Cannot handle " << size*CHAR_BIT << "-bit values\n";
+    throw AssembleIrError();
+  }*/
+
+  if (index > maxFastStackOffset)
   {
     assembly.insert(assembly.end(), {
-      "sub", stackSegmentReg, std::to_string(index-32),
-      "set", std::string("r") + char('0'+reg), std::to_string(size), "@", stackSegmentReg, "-", "32",
-      "add", stackSegmentReg, std::to_string(index-32),
+      "sub", stackSegmentReg, std::to_string(index-maxFastStackOffset),
+    });
+
+    for (uint8_t w = 0; w < std::ceil(size/2.0f); w++)
+    {
+      // Amount of memory to move for the current loop iteration.
+      std::string chunkSize = size % 2 == 1 && w == size/2 ? "1" : "2";
+
+      assembly.insert(assembly.end(), {
+        "set", std::string("r") + char('0'+startReg+w), chunkSize, "@", stackSegmentReg, "-", std::to_string(maxFastStackOffset + w*2),
+      });
+    }
+
+    assembly.insert(assembly.end(), {
+      "add", stackSegmentReg, std::to_string(index-maxFastStackOffset),
     });
   } else
   {
-    assembly.insert(assembly.end(), {
-      "set", std::string("r") + char('0'+reg), std::to_string(size), "@", stackSegmentReg, "-", std::to_string(index)
-    });
+    for (uint8_t w = 0; w < std::ceil(size/2.0f); w++)
+    {
+      // Amount of memory to move for the current loop iteration.
+      std::string chunkSize = size % 2 == 1 && w == size/2 ? "1" : "2";
+
+      assembly.insert(assembly.end(), {
+        "set", std::string("r") + char('0'+startReg+w), chunkSize, "@", stackSegmentReg, "-", std::to_string(index + w*2)
+      });
+    }
   }
 }
 
-void loadFromMem(std::vector<std::string>& assembly, const std::map<std::string, VarData>& variableMap, const std::string& var, uint8_t reg)
+void loadFromMem(std::vector<std::string>& assembly, const std::map<std::string, VarData>& variableMap, const std::string& var, uint8_t startReg)
 {
   if (var.find("_NullExpression") != std::string::npos)
   {
     assembly.insert(assembly.end(), {
-      "set", std::string("r") + char('0'+reg), "1",
+      "set", std::string("r") + char('0'+startReg), "1",
     });
-  } else if (variableMap.at(var).index != uint16_t(-1))
+
+    return;
+  }
+
+  const VarData& data = variableMap.at(var);
+
+  if (data.onStack())
   {
-    loadFromStack(assembly, variableMap.at(var).index, variableMap.at(var).type.size, reg);
+    loadFromStack(assembly, data.index, data.type.size, startReg);
   } else
   {
+    /*if (data.type.size > 2)
+    {
+      std::cerr << "Error: Cannot handle " << data.type.size*CHAR_BIT << "-bit values\n";
+      throw AssembleIrError();
+    }*/
+
     assembly.insert(assembly.end(), {
       "add", dataSegmentReg, "var_"+var, "-", "static_data",
-      "set", std::string("r") + char('0'+reg), std::to_string(variableMap.at(var).type.size), "@", dataSegmentReg,
+    });
+
+    for (uint8_t w = 0; w < std::ceil(data.type.size/2.0f); w++)
+    {
+      // Amount of memory to move for the current loop iteration.
+      std::string chunkSize = data.type.size % 2 == 1 && w == data.type.size/2 ? "1" : "2";
+
+      assembly.insert(assembly.end(), {
+        "set", std::string("r") + char('0'+startReg), chunkSize, "@", dataSegmentReg, "+", std::to_string(w*2),
+      });
+    }
+
+    assembly.insert(assembly.end(), {
       "sub", dataSegmentReg, "var_"+var, "-", "static_data",
     });
   }
 }
 
-void storeToStack(std::vector<std::string>& assembly, uint16_t index, uint16_t size, uint8_t reg)
+void storeToStack(std::vector<std::string>& assembly, uint16_t index, uint16_t size, uint8_t startReg)
 {
-  if (index > 32)
+  /*if (size > 2)
+  {
+    std::cerr << "Error: Cannot handle " << size*CHAR_BIT << "-bit values\n";
+    throw AssembleIrError();
+  }*/
+
+  if (index > maxFastStackOffset)
   {
     assembly.insert(assembly.end(), {
-      "sub", stackSegmentReg, std::to_string(index-32),
-      "put", std::string("r") + char('0'+reg), std::to_string(size), "@", stackSegmentReg, "-", "32",
-      "add", stackSegmentReg, std::to_string(index-32),
+      "sub", stackSegmentReg, std::to_string(index-maxFastStackOffset),
+    });
+
+    for (uint8_t w = 0; w < std::ceil(size/2.0f); w++)
+    {
+      // Amount of memory to move for the current loop iteration.
+      std::string chunkSize = size % 2 == 1 && w == size/2 ? "1" : "2";
+
+      assembly.insert(assembly.end(), {
+        "put", std::string("r") + char('0'+startReg), chunkSize, "@", stackSegmentReg, "-", std::to_string(maxFastStackOffset + w*2),
+      });
+    }
+
+    assembly.insert(assembly.end(), {
+      "add", stackSegmentReg, std::to_string(index-maxFastStackOffset),
     });
   } else
   {
-    assembly.insert(assembly.end(), {
-      "put", std::string("r") + char('0'+reg), std::to_string(size), "@", stackSegmentReg, "-", std::to_string(index)
-    });
+    for (uint8_t w = 0; w < std::ceil(size/2.0f); w++)
+    {
+      // Amount of memory to move for the current loop iteration.
+      std::string chunkSize = size % 2 == 1 && w == size/2 ? "1" : "2";
+
+      assembly.insert(assembly.end(), {
+        "put", std::string("r") + char('0'+startReg), chunkSize, "@", stackSegmentReg, "-", std::to_string(index + w*2)
+      });
+    }
   }
 }
 
-void storeToMem(std::vector<std::string>& assembly, const std::map<std::string, VarData>& variableMap, const std::string& var, uint8_t reg)
+void storeToMem(std::vector<std::string>& assembly, const std::map<std::string, VarData>& variableMap, const std::string& var, uint8_t startReg)
 {
-  if (variableMap.at(var).index != uint16_t(-1))
+  const VarData& data = variableMap.at(var);
+
+  if (data.onStack())
   {
-    storeToStack(assembly, variableMap.at(var).index, variableMap.at(var).type.size, reg);
+    storeToStack(assembly, data.index, data.type.size, startReg);
   } else
   {
+    /*if (variableMap.at(var).type.size > 2)
+    {
+      std::cerr << "Error: Cannot handle " << variableMap.at(var).type.size*CHAR_BIT << "-bit values\n";
+      throw AssembleIrError();
+    }*/
+
     assembly.insert(assembly.end(), {
       "add", dataSegmentReg, "var_"+var, "-", "static_data",
-      "put", std::string("r") + char('0'+reg), std::to_string(variableMap.at(var).type.size), "@", dataSegmentReg,
+    });
+
+    for (uint8_t w = 0; w < std::ceil(data.type.size/2.0f); w++)
+    {
+      // Amount of memory to move for the current loop iteration.
+      std::string chunkSize = data.type.size % 2 == 1 && w == data.type.size/2 ? "1" : "2";
+
+      assembly.insert(assembly.end(), {
+        "put", std::string("r") + char('0'+startReg), chunkSize, "@", dataSegmentReg, "+", std::to_string(w*2),
+      });
+    }
+
+    assembly.insert(assembly.end(), {
       "sub", dataSegmentReg, "var_"+var, "-", "static_data",
     });
   }
 }
 
-
-void loadOperand(std::vector<std::string>& assembly, const std::map<std::string, VarData>& variableMap, const std::string& var, uint8_t reg)
+void loadOperand(std::vector<std::string>& assembly, const std::map<std::string, VarData>& variableMap, PrimitiveType dataType, const std::string& var, uint8_t startReg)
 {
-  if (var.find_first_not_of("0123456789") != std::string::npos)
+  if (!isImmediate(var))
   {
-    loadFromMem(assembly, variableMap, var, reg);
+    loadFromMem(assembly, variableMap, var, startReg);
   } else if (!var.empty())
   {
-    assembly.insert(assembly.end(), {
-      "set", std::string("r") + char('0'+reg), var
-    });
+    std::array<uint8_t, 16> varValue = Constant::parseValue({}, dataType, var);
+    for (uint8_t w = 0; w < std::ceil(dataType.size/2.0f); w++)
+    {
+      assembly.insert(assembly.end(), {
+        "set", std::string("r") + char('0'+startReg+w), std::to_string(*(uint16_t*)varValue.begin())
+      });
+    }
   }
 }
 
@@ -107,7 +256,7 @@ std::vector<std::string> assembleIR(IRprogram& IR)
   };
 
   std::map<std::string, VarData> variableMap;
-  std::vector<std::string> argStack;
+  std::vector<std::pair<PrimitiveType, std::string>> argStack;
   uint16_t stackTop;
 
   std::map<std::size_t, std::string> staticVarsByIdx;
@@ -136,10 +285,16 @@ std::vector<std::string> assembleIR(IRprogram& IR)
     variableMap[var->second] = varData;
   }
 
+  // Confirm order of functions in binary
   std::vector<IRprogram::Function> initFunctions;
   IRprogram::Function mainFunction;
   for (std::size_t f = 0; f < IR.program.size(); f++)
   {
+    if (IR.program[f].body.empty())
+    {
+      continue;
+    }
+
     if (IR.program[f].body[0].operands[0] == "main")
     {
       mainFunction = IR.program[f];
@@ -172,27 +327,66 @@ std::vector<std::string> assembleIR(IRprogram& IR)
     for (const Operation& op: function.body)
     {
       assembly.emplace_back();
+
+      /*// Add return value to variable map
+      if (returnIndices[op.code] > -1 && returnIndices[op.code] < 3)
+      {
+        uint8_t returnIndex = returnIndices[op.code];
+        const std::string& returnName = op.operands[returnIndex];
+
+        if (!variableMap.contains(returnName))
+        {
+          stackTop += op.type.size;
+          variableMap[returnName] = VarData{stackTop, op.type};
+        }
+      }*/
+
+      // Add values to variable map
+      for (const std::string operand: op.operands)
+      {
+        if (!operand.empty() && !isImmediate(operand) && !variableMap.contains(operand))
+        {
+          stackTop += op.type.size;
+          variableMap[operand] = VarData{/*false, */stackTop, op.type};
+        }
+      }
+
       switch (op.code)
       {
         case Operation::Set:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*false, */stackTop, op.type};
-          }
+          //if (op.type.size <= 2)
+          //{
+            loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
+            storeToMem(assembly, variableMap, op.operands[0], 4);
+          //} else if (op.type.size <= 4)
+          //{
+            /*
+             * Example assembly
+             *
+             *   Loading immediate:
+             *     set d0 0xDEAD
+             *     set d1 0xBEEF
+             *
+             *     put d0 2@m0-1
+             *     put d1 2@m0
+             *
+             *   Loading from memory:
+             *     set d0 2@m0-3
+             *     set d1 2@m0-2
+             *
+             *     put d0 2@m0-1
+             *     put d1 2@m0
+             */
+            /*loadOperand(assembly, variableMap, op.operands[1], 4);
+            loadOperand(assembly, variableMap, op.operands[1], 5);
 
-          storeToMem(assembly, variableMap, op.operands[0], 4);
+            storeToMem(assembly, variableMap, op.operands[0], 4);
+            storeToMem(assembly, variableMap, op.operands[0], 5);
+          }*/
           break;
         case Operation::GetAddress:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*false, */stackTop, op.type};
-          }
-
-          if (variableMap[op.operands[1]].index != uint16_t(-1))
+          if (variableMap[op.operands[1]].onStack())
           {
             assembly.insert(assembly.end(), {
               "set", "d0", stackSegmentReg,
@@ -209,15 +403,10 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::DereferenceLValue:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
           // lvalue dereference
           loadFromMem(assembly, variableMap, op.operands[0], 3);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
           assembly.insert(assembly.end(), {
             "put", "d0", std::to_string(op.type.size), "@", "m3"
@@ -225,13 +414,8 @@ std::vector<std::string> assembleIR(IRprogram& IR)
 
           break;
         case Operation::DereferenceRValue:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
           // rvalue dereference
-          if (op.operands[1].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[1]))
           {
             assembly.insert(assembly.end(), {
               "set", "m3", op.operands[1],
@@ -249,15 +433,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
 
           break;
         case Operation::SetAddition:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "add", "d0", op.operands[2]
@@ -274,15 +452,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetSubtraction:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "sub", "d0", op.operands[2]
@@ -299,23 +471,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetMultiplication:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
-          {
-            assembly.insert(assembly.end(), {
-              "set", "d1", op.operands[2]
-            });
-          } else
-          {
-            loadFromMem(assembly, variableMap, op.operands[2], 5);
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[2], 5);
 
           /*
            * d0 = left
@@ -353,21 +511,67 @@ std::vector<std::string> assembleIR(IRprogram& IR)
 
           break;
         case Operation::SetDivision:
-          return assembly;
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
+
+          loadOperand(assembly, variableMap, op.type, op.operands[2], 5);
+
+          /*
+           * d0 = left
+           * d1 = right
+           * d2 = result
+           * while (d0 >= 0)
+           * {
+           *   d0 -= d1;
+           *   d2 += 1;
+           * }
+           * d2 -= 1;
+           */
+
+          assembly.insert(assembly.end(), {
+            "set", "d2", "0",
+            "set", "m3", instructionSegmentReg,
+            "add", "m3", "lbl_loop_" + op.operands[0], "-", "text",
+            "lbl_loop_" + op.operands[0] + ":",
+            "sub", "d0", "d1",
+            "add", "d2", "1",
+            "jns", "m3",
+            "sub", "d2", "1",
+          });
+
+          storeToMem(assembly, variableMap, op.operands[0], 6);
+
           break;
         case Operation::SetModulo:
-          return assembly;
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
+
+          loadOperand(assembly, variableMap, op.type, op.operands[2], 6);
+
+          /*
+           * d0 = left
+           * d2 = right
+           * while (d0 >= 0)
+           * {
+           *   d0 -= d2;
+           * }
+           * d0 += d2;
+           */
+
+          assembly.insert(assembly.end(), {
+            "set", "m3", instructionSegmentReg,
+            "add", "m3", "lbl_loop_" + op.operands[0], "-", "text",
+            "lbl_loop_" + op.operands[0] + ":",
+            "sub", "d0", "d2",
+            "jns", "m3",
+            "add", "d0", "d2",
+          });
+
+          storeToMem(assembly, variableMap, op.operands[0], 4);
+
           break;
         case Operation::SetBitwiseAND:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "and", "d0", op.operands[2]
@@ -384,15 +588,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetBitwiseOR:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "or", "d0", op.operands[2]
@@ -409,15 +607,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetBitwiseXOR:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "xor", "d0", op.operands[2]
@@ -434,15 +626,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetLeftShift:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
-          
-          loadOperand(assembly, variableMap, op.operands[1], 4);
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "lsh", "d0", op.operands[2]
@@ -459,15 +645,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetRightShift:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
-          
-          loadOperand(assembly, variableMap, op.operands[1], 4);
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "rsh", "d0", op.operands[2]
@@ -484,19 +664,13 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetLogicalAND:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
-
-          loadOperand(assembly, variableMap, op.operands[1], 4);
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
           assembly.insert(assembly.end(), {
             "set", "d0", "d0",
             "set", "d0", "FLAGS",
           });
 
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "set", "d1", std::to_string((std::stoi(op.operands[2]) == 0) << 6),
@@ -522,15 +696,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetLogicalOR:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "or", "d0", op.operands[2]
@@ -555,15 +723,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetEqual:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "sub", "d0", op.operands[2]
@@ -587,15 +749,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetNotEqual:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "sub", "d0", op.operands[2]
@@ -620,15 +776,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetGreater:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "set", "d1", op.operands[2],
@@ -650,15 +800,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 5);
           break;
         case Operation::SetLesser:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "sub", "d0", op.operands[2]
@@ -670,24 +814,14 @@ std::vector<std::string> assembleIR(IRprogram& IR)
             assembly.insert(assembly.end(), {
               "sub", "d0", "d1"
             });
-          }
-
-          assembly.insert(assembly.end(), {
-            "rsh", "d0", "15",
-          });
+          };
 
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetGreaterOrEqual:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "sub", "d0", op.operands[2]
@@ -709,15 +843,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::SetLesserOrEqual:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
-          loadOperand(assembly, variableMap, op.operands[1], 4);
-
-          if (op.operands[2].find_first_not_of("0123456789") == std::string::npos)
+          if (isImmediate(op.operands[2]))
           {
             assembly.insert(assembly.end(), {
               "set", "d1", op.operands[2],
@@ -740,13 +868,7 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::Negate:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
-
-          loadOperand(assembly, variableMap, op.operands[1], 4);
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
           assembly.insert(assembly.end(), {
             "set", "d1", "0",
@@ -756,13 +878,7 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 5);
           break;
         case Operation::LogicalNOT:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
-
-          loadOperand(assembly, variableMap, op.operands[1], 4);
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
           // Get the zero bit from the flags register
           assembly.insert(assembly.end(), {
@@ -775,13 +891,7 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           storeToMem(assembly, variableMap, op.operands[0], 4);
           break;
         case Operation::BitwiseNOT:
-          if (!variableMap.contains(op.operands[0]))
-          {
-            stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
-          }
-
-          loadOperand(assembly, variableMap, op.operands[1], 4);
+          loadOperand(assembly, variableMap, op.type, op.operands[1], 4);
 
           // Get the zero bit from the flags register
           assembly.insert(assembly.end(), {
@@ -796,7 +906,7 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           });
           break;
         case Operation::Return:
-          loadOperand(assembly, variableMap, op.operands[0], 4);
+          loadOperand(assembly, variableMap, op.type, op.operands[0], 4);
 
           assembly.insert(assembly.end(), {
             "put", "d0", std::to_string(op.type.size), "@", stackSegmentReg, "+", "2",
@@ -806,13 +916,13 @@ std::vector<std::string> assembleIR(IRprogram& IR)
 
           break;
         case Operation::AddArg:
-          argStack.emplace_back(op.operands[0]);
+          argStack.emplace_back(op.type, op.operands[0]);
           break;
         case Operation::Call: {
           if (!variableMap.contains(op.operands[1]))
           {
             stackTop += op.type.size;
-            variableMap[op.operands[0]] = VarData{/*true, */stackTop, op.type};
+            variableMap[op.operands[1]] = VarData{/*true, */stackTop, op.type};
           }
 
           assembly.insert(assembly.end(), {
@@ -823,9 +933,9 @@ std::vector<std::string> assembleIR(IRprogram& IR)
           });
 
           uint16_t argSize = 0;
-          for (const std::string& arg: argStack)
+          for (const std::pair<PrimitiveType, std::string>& arg: argStack)
           {
-            loadOperand(assembly, variableMap, arg, 4);
+            loadOperand(assembly, variableMap, arg.first, arg.second, 4);
 
             argSize += op.type.size;
             assembly.insert(assembly.end(), {

@@ -14,6 +14,9 @@ bool rawBinary = false;
 
 #include "tokenize.hpp"
 
+#include "../elf_handler/elf.hpp"
+#include "../elf_handler/elf.cpp"
+
 #include "assemble.hpp"
 
 #include "format_elf.hpp"
@@ -39,12 +42,18 @@ int main(int argc, char *argv[])
 
   std::vector<std::string> tokens = tokenize(processed);
 
-  std::vector<uint8_t> binary = assemble(tokens);
-
-  /*if (!rawBinary)
+  /*for (auto token: tokens)
   {
-    binary = formatELF(binary);
+    std::cout << "\"" << token << "\"\n";
   }*/
+
+  std::vector<ELF32::SymbolData> symbolTable;
+  std::vector<uint8_t> binary = assemble(tokens, &symbolTable);
+
+  if (!rawBinary)
+  {
+    binary = formatELF(binary, symbolTable);
+  }
 
   std::filebuf file;
   file.open(outputFilename, std::ios::out | std::ios::binary);

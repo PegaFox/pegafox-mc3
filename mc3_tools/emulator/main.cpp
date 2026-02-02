@@ -41,7 +41,7 @@ DebugWindow debugWindow;
 Memory layout
 
 With no particular size: Boot code, Data
-0xFE00-0xFEFF: Stack
+0xFE00-0xFEFF: RAM
 0xFF00-0xFFFF: I/O
   hdd - 7 bytes
   TTY - 1 byte
